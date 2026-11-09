@@ -51,6 +51,15 @@ jobs:
         if: runner.os == 'Linux'
         run: go test -race ./...
 
+      # The benchmark module (separate go.mod) must keep compiling. Only its
+      # tests run here; benchmark numbers on shared runners are too noisy.
+      - name: Vet and test benchmark module
+        if: runner.os == 'Linux'
+        working-directory: bench
+        run: |
+          go vet ./...
+          go test ./...
+
   interop:
     name: Interop with .NET client
     runs-on: ubuntu-latest
