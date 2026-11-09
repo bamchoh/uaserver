@@ -1,0 +1,4 @@
+/pki/
+*.exe
+tests/interop/dotnet/bin/
+tests/interop/dotnet/obj/
