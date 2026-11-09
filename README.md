@@ -25,6 +25,79 @@
 - HTTPS / WebSocket トランスポート、PubSub、GDS、リバースコネクト
 - CRL（証明書失効リスト）の検査
 
+## gopcua との比較
+
+Go の OPC UA ライブラリとしては [gopcua/opcua](https://github.com/gopcua/opcua) が広く使われています。
+gopcua はクライアントが中心で、多くの本番環境で使われています。uaserver はサーバーに絞った実装です。
+
+以下は gopcua の main ブランチ（コミット `79fa869`、2026-11-09 時点）のソースを読んで比較したものです。
+gopcua の README の表ではなく、コードの実装状況を基準にしています（`BadServiceUnsupported` を返すだけのサービスは「×」）。
+gopcua は活発に開発されているので、最新の状況は gopcua 側で確認してください。
+
+**凡例**：○ 対応　× 非対応　△ 一部対応（備考を参照）
+
+### 全体
+
+| 項目 | uaserver | gopcua |
+|---|---|---|
+| 主な用途 | サーバー | クライアント（サーバーは開発中） |
+| クライアント | × | ○（本番での利用実績が多い） |
+| 依存ライブラリ | Go 標準ライブラリのみ | google/uuid、golang.org/x/exp、golang.org/x/term など |
+| 成り立ち | UA-.NETStandard の移植 | 独自実装 |
+| 標準アドレス空間（名前空間 0） | ○ 公式 NodeSet2 を埋め込み | ○ 公式 NodeSet2 を埋め込み |
+| 独自 NodeSet2 の読み込み | ○ | ○ |
+| 相互接続の検証 | .NET 公式クライアントとの相互接続テストを CI で実行 | — |
+
+### セキュリティ（サーバー）
+
+| 項目 | uaserver | gopcua サーバー | gopcua クライアント |
+|---|---|---|---|
+| None | ○ | ○ | ○ |
+| Basic128Rsa15（廃止） | × | △ 未検証 ※1 | ○ |
+| Basic256（廃止） | × | △ 未検証 ※1 | ○ |
+| Basic256Sha256 | ○ | △ 未検証 ※1 | ○ |
+| Aes128_Sha256_RsaOaep | ○ | △ 未検証 ※1 | ○ |
+| Aes256_Sha256_RsaPss | ○ | △ 未検証 ※1 | ○ |
+| ECC_nistP256 / ECC_nistP384 | ○ | × | × |
+| Anonymous 認証 | ○ | ○ | ○ |
+| UserName 認証 | ○ パスワードを検証 | △ ※2 | ○ |
+| X509 ユーザー認証 | ○ 署名と信頼リストを検証 | △ ※2 | ○ |
+| クライアント証明書の信頼リスト（trusted / rejected） | ○ | × | — |
+| 自己署名証明書の自動生成 | ○ | × ライブラリは証明書と鍵を受け取る（生成コードはサンプルにあり） | — |
+
+※1 gopcua の README で「Untested」とされているもの。
+※2 ポリシーとして提示できますが、ActivateSession でユーザートークン（パスワードや証明書）を検証していません。
+
+### サービス（サーバー）
+
+| サービスセット | サービス | uaserver | gopcua サーバー |
+|---|---|---|---|
+| Discovery | FindServers / GetEndpoints | ○ | ○ |
+| | FindServersOnNetwork | △ 空の一覧を返す | × |
+| | RegisterServer / RegisterServer2 | × | × |
+| Session | CreateSession / ActivateSession / CloseSession | ○ | ○ |
+| | Cancel | △ 応答のみ（取り消しはしない） | × |
+| View | Browse / BrowseNext | ○ | ○ |
+| | TranslateBrowsePathsToNodeIds | ○ | × |
+| | RegisterNodes / UnregisterNodes | ○ | ○ |
+| Attribute | Read / Write | ○ | ○ |
+| | HistoryRead / HistoryUpdate | × | × |
+| Method | Call | ○ | × |
+| MonitoredItem | CreateMonitoredItems / DeleteMonitoredItems / SetMonitoringMode | ○ | ○ |
+| | ModifyMonitoredItems | ○ | × |
+| | SetTriggering | × | × |
+| Subscription | CreateSubscription / DeleteSubscriptions / Publish | ○ | ○ |
+| | ModifySubscription / SetPublishingMode | ○ | × |
+| | Republish / TransferSubscriptions | ○ | × |
+| NodeManagement | AddNodes など | × | × |
+| Query | QueryFirst / QueryNext | × | × |
+
+### どちらを選ぶか
+
+- **OPC UA サーバーに接続して値を読み書きしたい**（クライアント）：gopcua を使ってください。uaserver にはクライアントがありません。
+- **Go で OPC UA サーバーを作りたい**：uaserver のほうが、認証、証明書の信頼管理、メソッド呼び出し、サブスクリプション系のサービスまで揃っています。
+- **廃止されたポリシー（Basic128Rsa15 / Basic256）しか使えない古い機器とつなぎたい**：uaserver は非対応です。
+
 ## 使い方
 
 ```sh
