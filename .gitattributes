@@ -1,0 +1,4 @@
+# Keep LF line endings on every platform so gofmt and the generated code
+# check behave the same on Windows and Linux.
+* text=auto eol=lf
+*.gz binary

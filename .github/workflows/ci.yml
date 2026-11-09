@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Check generated code is up to date
+        shell: bash
+        run: |
+          go generate ./ua
+          git diff --exit-code -- ua
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      # The race detector needs cgo; the Linux runner has gcc.
+      - name: Test with race detector
+        if: runner.os == 'Linux'
+        run: go test -race ./...
+
+  interop:
+    name: Interop with .NET client
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build server (with race detector)
+        run: go build -race -o "$RUNNER_TEMP/opcuasrv" ./cmd/opcuasrv
+
+      - name: Build .NET interop client
+        working-directory: tests/interop/dotnet
+        run: dotnet build -c Release
+
+      - name: Start server
+        run: |
+          cd "$RUNNER_TEMP"
+          GORACE="halt_on_error=1" ./opcuasrv -addr :48400 -url opc.tcp://localhost:48400 \
+            -pki "$RUNNER_TEMP/pki" -autoaccept > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          for i in $(seq 1 30); do
+            if (echo > /dev/tcp/localhost/48400) 2>/dev/null; then
+              echo "server is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not start"
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+
+      - name: Run interop tests
+        working-directory: tests/interop/dotnet
+        run: dotnet run -c Release --no-build -- opc.tcp://localhost:48400
+
+      - name: Check server for data races
+        if: always()
+        run: |
+          if grep -q "WARNING: DATA RACE" "$RUNNER_TEMP/server.log"; then
+            echo "The race detector reported data races:"
+            cat "$RUNNER_TEMP/server.log"
+            exit 1
+          fi
+          if ! kill -0 "$(cat "$RUNNER_TEMP/server.pid")" 2>/dev/null; then
+            echo "The server exited during the tests:"
+            cat "$RUNNER_TEMP/server.log"
+            exit 1
+          fi
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: ${{ runner.temp }}/server.log
+          if-no-files-found: ignore
