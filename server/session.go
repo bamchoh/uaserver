@@ -1,7 +1,6 @@
 package server
 
 import (
-	"crypto/rsa"
 	"crypto/subtle"
 	"crypto/x509"
 	"encoding/binary"
@@ -129,7 +128,9 @@ func (m *sessionManager) createSession(ch *uasc.Channel, r *ua.CreateSessionRequ
 		if clientCert == nil || string(clientCert.Raw) != string(ch.RemoteCertificateDER()) {
 			return fault(hdr, ua.StatusBadCertificateInvalid)
 		}
-		if len(r.ClientNonce) < policy.NonceLength {
+		// Session nonces are 32 to 128 bytes for every policy (Part 4, 5.7.2.2);
+		// they are unrelated to the (longer) ECC secure channel nonces.
+		if len(r.ClientNonce) < 32 || len(r.ClientNonce) > 128 {
 			return fault(hdr, ua.StatusBadNonceInvalid)
 		}
 		if uri := CertificateURI(clientCert); uri != r.ClientDescription.ApplicationUri {
@@ -172,7 +173,11 @@ func (m *sessionManager) createSession(ch *uasc.Channel, r *ua.CreateSessionRequ
 	var sig ua.SignatureData
 	if !policy.IsNone() && clientCert != nil {
 		data := append(append([]byte{}, clientCert.Raw...), r.ClientNonce...)
-		b, err := policy.AsymSign(s.key, data)
+		cred := s.credential(policy.URI)
+		if cred == nil {
+			return fault(hdr, ua.StatusBadInternalError)
+		}
+		b, err := policy.AsymSign(cred.PrivateKey, data)
 		if err != nil {
 			return fault(hdr, ua.StatusBadInternalError)
 		}
@@ -191,7 +196,7 @@ func (m *sessionManager) createSession(ch *uasc.Channel, r *ua.CreateSessionRequ
 		AuthenticationToken:   sess.authToken,
 		RevisedSessionTimeout: float64(timeout / time.Millisecond),
 		ServerNonce:           nonce,
-		ServerCertificate:     s.cert,
+		ServerCertificate:     s.serverCertificate(policy.URI),
 		ServerEndpoints:       s.endpointsFor(r.EndpointUrl),
 		ServerSignature:       sig,
 		MaxRequestMessageSize: 0,
@@ -226,12 +231,11 @@ func (m *sessionManager) activateSession(ch *uasc.Channel, r *ua.ActivateSession
 		if sess.clientCert == nil {
 			return fault(hdr, ua.StatusBadApplicationSignatureInvalid)
 		}
-		pub, ok := sess.clientCert.PublicKey.(*rsa.PublicKey)
-		if !ok || r.ClientSignature.Algorithm != policy.AsymSignatureAlgorithm {
+		if r.ClientSignature.Algorithm != policy.AsymSignatureAlgorithm {
 			return fault(hdr, ua.StatusBadApplicationSignatureInvalid)
 		}
-		data := append(append([]byte{}, s.cert...), sess.serverNonce...)
-		if err := policy.AsymVerify(pub, data, r.ClientSignature.Signature); err != nil {
+		data := append(append([]byte{}, s.serverCertificate(policy.URI)...), sess.serverNonce...)
+		if err := policy.AsymVerify(sess.clientCert.PublicKey, data, r.ClientSignature.Signature); err != nil {
 			return fault(hdr, ua.StatusBadApplicationSignatureInvalid)
 		}
 	}
@@ -335,7 +339,7 @@ func (s *Server) validateIdentity(ch *uasc.Channel, ep *ua.EndpointDescription, 
 			if t.EncryptionAlgorithm != sp.AsymEncryptionAlgorithm {
 				return Identity{}, ua.StatusBadIdentityTokenInvalid
 			}
-			pt, err := sp.AsymDecrypt(s.key, t.Password)
+			pt, err := sp.AsymDecrypt(s.rsaKey(), t.Password)
 			if err != nil || len(pt) < 4 {
 				return Identity{}, ua.StatusBadIdentityTokenInvalid
 			}
@@ -370,15 +374,16 @@ func (s *Server) validateIdentity(ch *uasc.Channel, ep *ua.EndpointDescription, 
 		if err != nil {
 			return Identity{}, ua.StatusBadIdentityTokenInvalid
 		}
-		pub, ok := cert.PublicKey.(*rsa.PublicKey)
-		if !ok {
+		pub := cert.PublicKey
+		if !sp.CertificateKeyAllowed(pub) {
 			return Identity{}, ua.StatusBadIdentityTokenInvalid
 		}
-		data := append(append([]byte{}, s.cert...), serverNonce...)
+		data := append(append([]byte{}, s.serverCertificate(ch.SecurityPolicy().URI)...), serverNonce...)
 		if tokSig.Algorithm != sp.AsymSignatureAlgorithm || sp.AsymVerify(pub, data, tokSig.Signature) != nil {
 			return Identity{}, ua.StatusBadUserSignatureInvalid
 		}
-		if err := s.pki.Validate([]*x509.Certificate{cert}); err != nil {
+		if err := s.pki.ValidateUser(cert); err != nil {
+			s.logf("user certificate %q rejected: %v", cert.Subject.CommonName, err)
 			return Identity{}, ua.StatusBadIdentityTokenRejected
 		}
 		if s.cfg.AuthenticateCertificate != nil && !s.cfg.AuthenticateCertificate(cert) {

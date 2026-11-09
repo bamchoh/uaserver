@@ -9,10 +9,10 @@
 |---|---|
 | トランスポート | opc.tcp (UA-CP: Hello/Ack/Error)、チャンク分割（送受信の両方） |
 | エンコーディング | UA Binary（25 の組み込み型すべて、構造体 345 種は `Opc.Ua.Types.bsd` から自動生成） |
-| セキュリティポリシー | None, Basic256Sha256, Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss（それぞれ Sign / SignAndEncrypt） |
+| セキュリティポリシー | None, Basic256Sha256, Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, ECC_nistP256, ECC_nistP384（それぞれ Sign / SignAndEncrypt） |
 | セキュアチャネル | OPN（非対称暗号＋署名）、MSG（対称暗号＋HMAC）、トークンの Renew、シーケンス番号の検査 |
-| 証明書 | 自己署名証明書の自動生成、`pki/{own,trusted,issuer,rejected}` ストア（.NET 版と同じ構成）、CA チェーンの検証 |
-| ユーザー認証 | Anonymous、UserName（パスワードは RSA で暗号化、None エンドポイントでも暗号化）、X509 証明書 |
+| 証明書 | 自己署名証明書の自動生成（RSA と ECC P-256 / P-384）、`pki/{own,trusted,issuer,rejected}` ストア（.NET 版と同じ構成）、CA チェーンの検証 |
+| ユーザー認証 | Anonymous、UserName（パスワードは RSA で暗号化、None エンドポイントでも暗号化）、X509 証明書（ECC エンドポイントでは ECC のユーザー証明書） |
 | アドレス空間 | 公式 `Opc.Ua.NodeSet2.xml`（名前空間 0）を埋め込んで読み込み。独自の NodeSet2 も `LoadNodeSet` で読み込み可能 |
 | サービス | GetEndpoints, FindServers, CreateSession / ActivateSession / CloseSession, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write（IndexRange・型チェック付き）, Call, Subscription 系一式（Create / Modify / SetPublishingMode / Publish / Republish / Transfer / Delete）, MonitoredItem 系一式（データ変化通知、絶対値デッドバンド） |
 
@@ -20,7 +20,8 @@
 
 - イベント / アラーム（EventFilter）、履歴（HistoryRead/Update）、Query、NodeManagement（AddNodes など）
 - PercentDeadband、SetTriggering、集計（Aggregate）フィルター
-- ECC 系のセキュリティポリシー、廃止された Basic128Rsa15 / Basic256
+- ECC エンドポイントでの UserName 認証（パスワードの EccEncryptedSecret 形式が未実装のため、ECC エンドポイントでは提示しない）
+- ECC の AesGcm / ChaChaPoly 版、brainpool、curve25519 / curve448、廃止された Basic128Rsa15 / Basic256
 - HTTPS / WebSocket トランスポート、PubSub、GDS、リバースコネクト
 - CRL（証明書失効リスト）の検査
 
@@ -88,5 +89,5 @@ go run ./cmd/opcuasrv -addr :48400 -url opc.tcp://localhost:48400 -autoaccept
 cd tests/interop/dotnet && dotnet run -- opc.tcp://localhost:48400
 ```
 
-全ポリシーとモードの組み合わせ、匿名とユーザー名の認証、Browse / Translate / Read / Write / Call、
-4000 ノードの一括読み出し（マルチチャンク）、Subscription と Publish、トークンの Renew を確認します。
+全ポリシー（ECC を含む）とモードの組み合わせ、匿名・ユーザー名・X509 証明書（RSA と ECC）の認証、Browse / Translate / Read / Write / Call、
+4000 ノードの一括読み出し（マルチチャンク）、Subscription と Publish、トークンの Renew（RSA と ECC）を確認します。

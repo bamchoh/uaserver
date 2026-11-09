@@ -174,12 +174,13 @@ func (c *Config) setDefaults() {
 
 // Server is an OPC UA server.
 type Server struct {
-	cfg       Config
-	as        *AddressSpace
-	pki       *CertificateStore
-	cert      []byte
-	certX509  *x509.Certificate
-	key       *rsa.PrivateKey
+	cfg Config
+	as  *AddressSpace
+	pki *CertificateStore
+	// rsaCred is the RSA application certificate (RSA policies, user token
+	// encryption). eccCreds holds the ECC certificates by ECC policy URI.
+	rsaCred   *uasc.Credential
+	eccCreds  map[string]*uasc.Credential
 	endpoints []ua.EndpointDescription
 	chCfg     *uasc.Config
 	startTime time.Time
@@ -206,28 +207,35 @@ func New(cfg Config) (*Server, error) {
 		pki:       &CertificateStore{Root: cfg.PKIDir, AutoAccept: cfg.AutoAcceptUntrustedCertificates},
 	}
 	s.nextChannelID.Store(uint32(time.Now().Unix() & 0xFFFF))
-	needCert := false
+	needRSA := false
+	s.eccCreds = map[string]*uasc.Credential{}
 	for _, sc := range cfg.Security {
 		p := uasc.PolicyByURI(sc.PolicyURI)
 		if p == nil {
 			return nil, fmt.Errorf("server: unsupported security policy %s", sc.PolicyURI)
 		}
-		if !p.IsNone() {
-			needCert = true
+		switch {
+		case p.IsECC():
+			der, key, err := s.pki.LoadOrCreateOwnECC(cfg.ApplicationURI, cfg.ApplicationName, cfg.Hostnames, p.CertCurve())
+			if err != nil {
+				return nil, fmt.Errorf("server: ECC certificate: %w", err)
+			}
+			s.eccCreds[p.URI] = &uasc.Credential{Certificate: der, PrivateKey: key}
+		case !p.IsNone():
+			needRSA = true
 		}
 	}
 	for _, t := range cfg.UserTokens {
 		if t != UserTokenAnonymous {
-			needCert = true
+			needRSA = true // user tokens are secured with the RSA certificate
 		}
 	}
-	if needCert {
+	if needRSA {
 		der, key, err := s.pki.LoadOrCreateOwn(cfg.ApplicationURI, cfg.ApplicationName, cfg.Hostnames)
 		if err != nil {
 			return nil, fmt.Errorf("server: certificate: %w", err)
 		}
-		s.cert, s.key = der, key
-		s.certX509, _ = x509.ParseCertificate(der)
+		s.rsaCred = &uasc.Credential{Certificate: der, PrivateKey: key}
 	}
 	s.as = newAddressSpace(cfg.ApplicationURI)
 	if err := loadNS0(s.as); err != nil {
@@ -237,8 +245,7 @@ func New(cfg Config) (*Server, error) {
 	s.endpoints = s.buildEndpoints()
 	s.sessions = newSessionManager(s)
 	s.chCfg = &uasc.Config{
-		Certificate:       s.cert,
-		PrivateKey:        s.key,
+		Credentials:       s.credential,
 		IsAllowed:         s.isAllowed,
 		VerifyCertificate: s.pki.Validate,
 		MinTokenLifetime:  10_000,
@@ -261,6 +268,32 @@ func (s *Server) Endpoints() []ua.EndpointDescription { return s.endpoints }
 func (s *Server) Config() Config { return s.cfg }
 
 func (s *Server) logf(format string, args ...any) { s.cfg.Logger.Printf(format, args...) }
+
+// credential returns the certificate and key used with a security policy.
+// The None policy uses the RSA certificate (it secures user tokens).
+func (s *Server) credential(policyURI string) *uasc.Credential {
+	if p := uasc.PolicyByURI(policyURI); p != nil && p.IsECC() {
+		return s.eccCreds[policyURI]
+	}
+	return s.rsaCred
+}
+
+// serverCertificate returns the DER certificate advertised for a policy.
+func (s *Server) serverCertificate(policyURI string) []byte {
+	if c := s.credential(policyURI); c != nil {
+		return c.Certificate
+	}
+	return nil
+}
+
+// rsaKey returns the RSA private key, or nil.
+func (s *Server) rsaKey() *rsa.PrivateKey {
+	if s.rsaCred == nil {
+		return nil
+	}
+	k, _ := s.rsaCred.PrivateKey.(*rsa.PrivateKey)
+	return k
+}
 
 func (s *Server) isAllowed(policy string, mode ua.MessageSecurityMode) bool {
 	for _, sc := range s.cfg.Security {
@@ -288,15 +321,16 @@ func (s *Server) applicationDescription() ua.ApplicationDescription {
 
 func (s *Server) buildEndpoints() []ua.EndpointDescription {
 	var eps []ua.EndpointDescription
-	// The strongest policy offered is used to encrypt user tokens on None endpoints.
+	// The strongest RSA policy offered secures user tokens on None and ECC
+	// endpoints (user tokens are encrypted/signed with RSA algorithms).
 	strongest := ""
 	best := byte(0)
 	for _, sc := range s.cfg.Security {
-		if p := uasc.PolicyByURI(sc.PolicyURI); !p.IsNone() && p.SecurityLevel >= best {
+		if p := uasc.PolicyByURI(sc.PolicyURI); !p.IsNone() && !p.IsECC() && p.SecurityLevel >= best {
 			strongest, best = p.URI, p.SecurityLevel
 		}
 	}
-	if strongest == "" && s.cert != nil {
+	if strongest == "" && s.rsaCred != nil {
 		strongest = uasc.SecurityPolicyBasic256Sha256
 	}
 	for _, sc := range s.cfg.Security {
@@ -304,7 +338,9 @@ func (s *Server) buildEndpoints() []ua.EndpointDescription {
 		for _, m := range sc.Modes {
 			var tokens []ua.UserTokenPolicy
 			for _, t := range s.cfg.UserTokens {
-				tokens = append(tokens, s.userTokenPolicy(t, p, strongest))
+				if tp, ok := s.userTokenPolicy(t, p, strongest); ok {
+					tokens = append(tokens, tp)
+				}
 			}
 			ep := ua.EndpointDescription{
 				EndpointUrl:         s.cfg.EndpointURL,
@@ -315,29 +351,40 @@ func (s *Server) buildEndpoints() []ua.EndpointDescription {
 				TransportProfileUri: uasc.TransportProfileUaTcp,
 				SecurityLevel:       uasc.SecurityLevel(p.URI, m),
 			}
-			if s.cert != nil {
-				ep.ServerCertificate = s.cert
-			}
+			ep.ServerCertificate = s.serverCertificate(p.URI)
 			eps = append(eps, ep)
 		}
 	}
 	return eps
 }
 
-func (s *Server) userTokenPolicy(t UserTokenType, channelPolicy *uasc.SecurityPolicy, strongest string) ua.UserTokenPolicy {
+// userTokenPolicy returns the user token policy offered on an endpoint. It
+// returns false if the token type cannot be offered on the endpoint.
+func (s *Server) userTokenPolicy(t UserTokenType, channelPolicy *uasc.SecurityPolicy, strongest string) (ua.UserTokenPolicy, bool) {
+	if t == UserTokenAnonymous {
+		return ua.UserTokenPolicy{PolicyId: "Anonymous", TokenType: ua.UserTokenTypeAnonymous}, true
+	}
 	tokenPolicy := ""
 	suffix := ""
-	if channelPolicy.IsNone() && t != UserTokenAnonymous {
+	if channelPolicy.IsECC() {
+		// Passwords on ECC endpoints need the EccEncryptedSecret format, which
+		// is not implemented: user name tokens are not offered there.
+		if t == UserTokenUserName {
+			return ua.UserTokenPolicy{}, false
+		}
+		// X509 tokens use the channel's ECC policy (clients only pick token
+		// policies of the same key family), so the user certificate must be ECC.
+	} else if channelPolicy.IsNone() {
 		tokenPolicy = strongest
 		suffix = "_" + uasc.PolicyByURI(strongest).Name
 	}
 	switch t {
 	case UserTokenUserName:
-		return ua.UserTokenPolicy{PolicyId: "UserName" + suffix, TokenType: ua.UserTokenTypeUserName, SecurityPolicyUri: tokenPolicy}
+		return ua.UserTokenPolicy{PolicyId: "UserName" + suffix, TokenType: ua.UserTokenTypeUserName, SecurityPolicyUri: tokenPolicy}, true
 	case UserTokenCertificate:
-		return ua.UserTokenPolicy{PolicyId: "Certificate" + suffix, TokenType: ua.UserTokenTypeCertificate, SecurityPolicyUri: tokenPolicy}
+		return ua.UserTokenPolicy{PolicyId: "Certificate" + suffix, TokenType: ua.UserTokenTypeCertificate, SecurityPolicyUri: tokenPolicy}, true
 	}
-	return ua.UserTokenPolicy{PolicyId: "Anonymous", TokenType: ua.UserTokenTypeAnonymous}
+	return ua.UserTokenPolicy{}, false
 }
 
 // ListenAndServe starts listening and serves until Close is called.

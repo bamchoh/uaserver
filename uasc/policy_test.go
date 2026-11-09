@@ -14,6 +14,9 @@ func TestAsymmetricRoundTrip(t *testing.T) {
 	}
 	for _, uri := range SupportedPolicies()[1:] {
 		p := PolicyByURI(uri)
+		if p.IsECC() {
+			continue // covered by ecc_test.go
+		}
 		pb := p.AsymPlainBlockSize(&key.PublicKey)
 		data := bytes.Repeat([]byte{0x5A}, pb*3)
 		enc, err := p.AsymEncrypt(&key.PublicKey, data)
@@ -44,6 +47,9 @@ func TestAsymmetricRoundTrip(t *testing.T) {
 func TestSymmetricRoundTrip(t *testing.T) {
 	for _, uri := range SupportedPolicies()[1:] {
 		p := PolicyByURI(uri)
+		if p.IsECC() {
+			continue // covered by ecc_test.go
+		}
 		k := p.DeriveKeys(NewNonce(32), NewNonce(32))
 		if len(k.SigningKey) != p.SymSigningKeyLength || len(k.EncryptionKey) != p.SymEncryptionKeyLength || len(k.IV) != p.SymBlockSize {
 			t.Fatalf("%s: key lengths", p.Name)

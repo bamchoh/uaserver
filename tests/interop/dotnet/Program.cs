@@ -4,9 +4,12 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
+using Opc.Ua.Security.Certificates;
 
 string url = args.Length > 0 ? args[0] : "opc.tcp://localhost:48400";
-ITelemetryContext telemetry = DefaultTelemetry.Create(l => l.AddConsole().SetMinimumLevel(LogLevel.Critical));
+// Optional second argument: run only the cases whose name contains this text.
+string? only = args.Length > 1 ? args[1] : null;
+ITelemetryContext telemetry = DefaultTelemetry.Create(l => l.AddConsole().SetMinimumLevel(Environment.GetEnvironmentVariable("INTEROP_VERBOSE") != null ? LogLevel.Information : LogLevel.Critical));
 string pki = Path.Combine(AppContext.BaseDirectory, "pki");
 
 var config = new ApplicationConfiguration(telemetry)
@@ -16,12 +19,17 @@ var config = new ApplicationConfiguration(telemetry)
     ApplicationType = ApplicationType.Client,
     SecurityConfiguration = new SecurityConfiguration
     {
-        ApplicationCertificate = new CertificateIdentifier
-        {
-            StoreType = CertificateStoreType.Directory,
-            StorePath = Path.Combine(pki, "own"),
-            SubjectName = "CN=InteropClient, O=opcuasrv"
-        },
+        // One application certificate per key type: RSA for the RSA policies,
+        // NIST P-256 / P-384 for the ECC policies.
+        ApplicationCertificates =
+        [
+            new CertificateIdentifier { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(pki, "own"),
+                SubjectName = "CN=InteropClient, O=opcuasrv", CertificateType = ObjectTypeIds.RsaSha256ApplicationCertificateType },
+            new CertificateIdentifier { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(pki, "own"),
+                SubjectName = "CN=InteropClient, O=opcuasrv", CertificateType = ObjectTypeIds.EccNistP256ApplicationCertificateType },
+            new CertificateIdentifier { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(pki, "own"),
+                SubjectName = "CN=InteropClient, O=opcuasrv", CertificateType = ObjectTypeIds.EccNistP384ApplicationCertificateType },
+        ],
         TrustedIssuerCertificates = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(pki, "issuer") },
         TrustedPeerCertificates = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(pki, "trusted") },
         RejectedCertificateStore = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(pki, "rejected") },
@@ -41,11 +49,59 @@ const string None = SecurityPolicies.None;
 const string B256 = SecurityPolicies.Basic256Sha256;
 const string A128 = SecurityPolicies.Aes128_Sha256_RsaOaep;
 const string A256 = SecurityPolicies.Aes256_Sha256_RsaPss;
+const string E256 = SecurityPolicies.ECC_nistP256;
+const string E384 = SecurityPolicies.ECC_nistP384;
 var anon = new UserIdentity(new AnonymousIdentityToken());
 IUserIdentity User(string u, string p) => new UserIdentity(u, System.Text.Encoding.UTF8.GetBytes(p));
 
+// X509 user: a dedicated user certificate (no application URI, unlike the
+// application instance certificate) stored in its own directory store.
+var userCertId = new CertificateIdentifier
+{
+    StoreType = CertificateStoreType.Directory,
+    StorePath = Path.Combine(pki, "user"),
+    SubjectName = "CN=InteropUser, O=opcuasrv"
+};
+using (ICertificateStore store = new CertificateStoreIdentifier(userCertId.StorePath, false).OpenStore(telemetry))
+{
+    if ((await store.EnumerateAsync(CancellationToken.None)).Count == 0)
+    {
+        using var userCert = CertificateBuilder.Create(userCertId.SubjectName).SetLifeTime(12).CreateForRSA();
+        await store.AddAsync(userCert, null, CancellationToken.None);
+    }
+}
+var x509 = new UserIdentity(new X509IdentityTokenHandler(userCertId, new CertificatePasswordProvider(), config.CertificateManager.CertificateProvider, null));
+
+// ECC endpoints only accept user tokens of the same key family, so the X509
+// user for ECC endpoints has a NIST P-256 certificate.
+var userEccCertId = new CertificateIdentifier
+{
+    StoreType = CertificateStoreType.Directory,
+    StorePath = Path.Combine(pki, "user_ecc"),
+    SubjectName = "CN=InteropEccUser, O=opcuasrv",
+    CertificateType = ObjectTypeIds.EccNistP256ApplicationCertificateType
+};
+using (ICertificateStore store = new CertificateStoreIdentifier(userEccCertId.StorePath, false).OpenStore(telemetry))
+{
+    if ((await store.EnumerateAsync(CancellationToken.None)).Count == 0)
+    {
+        using var userCert = CertificateBuilder.Create(userEccCertId.SubjectName).SetLifeTime(12)
+            .SetECCurve(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).CreateForECDsa();
+        await store.AddAsync(userCert, null, CancellationToken.None);
+    }
+}
+var x509Ecc = new UserIdentity(new X509IdentityTokenHandler(userEccCertId, new CertificatePasswordProvider(), config.CertificateManager.CertificateProvider, null));
+
 var cases = new (string Policy, MessageSecurityMode Mode, IUserIdentity User, bool ExpectOk)[]
 {
+    (None, MessageSecurityMode.None, x509, true),
+    (B256, MessageSecurityMode.SignAndEncrypt, x509, true),
+    (A256, MessageSecurityMode.Sign, x509, true),
+    (E256, MessageSecurityMode.Sign, anon, true),
+    (E256, MessageSecurityMode.SignAndEncrypt, anon, true),
+    (E384, MessageSecurityMode.Sign, anon, true),
+    (E384, MessageSecurityMode.SignAndEncrypt, anon, true),
+    (E256, MessageSecurityMode.SignAndEncrypt, x509Ecc, true),
     (None, MessageSecurityMode.None, anon, true),
     (None, MessageSecurityMode.None, User("user1", "password1"), true),
     (B256, MessageSecurityMode.Sign, anon, true),
@@ -61,6 +117,7 @@ int failures = 0;
 foreach (var c in cases)
 {
     string name = $"{c.Policy.Split('#')[1]}/{c.Mode}/{(c.User.TokenType == UserTokenType.Anonymous ? "anon" : c.User.DisplayName)}";
+    if (only != null && !name.Contains(only)) continue;
     try
     {
         using var cts = new CancellationTokenSource(c.ExpectOk ? TimeSpan.FromMinutes(2) : TimeSpan.FromSeconds(8));
@@ -75,27 +132,32 @@ foreach (var c in cases)
     }
 }
 // Security token renewal: request a short token lifetime and keep the channel busy.
-try
+// RSA renews with new random nonces, ECC with new ephemeral keys.
+config.TransportQuotas.SecurityTokenLifetime = 10000;
+foreach (string policy in only == null ? new[] { B256, E256 } : Array.Empty<string>())
 {
-    config.TransportQuotas.SecurityTokenLifetime = 10000;
-    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-    await using ManagedSession s = await new ManagedSessionBuilder(config, telemetry)
-        .UseEndpoint(url, MessageSecurityMode.SignAndEncrypt, B256)
-        .WithSessionName("interop renewal").WithUserIdentity(anon).ConnectAsync(cts.Token);
-    for (int i = 0; i < 25; i++)
+    string name = policy.Split('#')[1];
+    try
     {
-        var r = await s.ReadAsync(null, 0, TimestampsToReturn.Both, new[] {
-            new ReadValueId { NodeId = VariableIds.Server_ServerStatus_CurrentTime, AttributeId = Attributes.Value } }, cts.Token);
-        Check(StatusCode.IsGood(r.Results[0].StatusCode), "read during renewal");
-        await Task.Delay(1000, cts.Token);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        await using ManagedSession s = await new ManagedSessionBuilder(config, telemetry)
+            .UseEndpoint(url, MessageSecurityMode.SignAndEncrypt, policy)
+            .WithSessionName("interop renewal " + name).WithUserIdentity(anon).ConnectAsync(cts.Token);
+        for (int i = 0; i < 25; i++)
+        {
+            var r = await s.ReadAsync(null, 0, TimestampsToReturn.Both, new[] {
+                new ReadValueId { NodeId = VariableIds.Server_ServerStatus_CurrentTime, AttributeId = Attributes.Value } }, cts.Token);
+            Check(StatusCode.IsGood(r.Results[0].StatusCode), "read during renewal");
+            await Task.Delay(1000, cts.Token);
+        }
+        await s.CloseAsync(cts.Token);
+        Console.WriteLine($"PASS token renewal {name} (25s with 10s token lifetime)");
     }
-    await s.CloseAsync(cts.Token);
-    Console.WriteLine("PASS token renewal (25s with 10s token lifetime)");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"FAIL token renewal: {ex}");
-    failures++;
+    catch (Exception ex)
+    {
+        Console.WriteLine($"FAIL token renewal {name}: {ex}");
+        failures++;
+    }
 }
 
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");

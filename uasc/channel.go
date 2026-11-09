@@ -4,6 +4,8 @@
 package uasc
 
 import (
+	"crypto"
+	"crypto/ecdh"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/x509"
@@ -19,11 +21,18 @@ import (
 	"opcuasrv/uacp"
 )
 
+// Credential is an application instance certificate with its private key.
+type Credential struct {
+	Certificate []byte // DER
+	PrivateKey  crypto.Signer
+}
+
 // Config holds the server side settings of a secure channel.
 type Config struct {
-	// Certificate is the DER encoded application instance certificate.
-	Certificate []byte
-	PrivateKey  *rsa.PrivateKey
+	// Credentials returns the server certificate and key used with a security
+	// policy (RSA for the RSA policies, an ECC certificate for the ECC
+	// policies). It returns nil if the policy has no certificate.
+	Credentials func(policyURI string) *Credential
 	// IsAllowed reports whether an endpoint offers the policy/mode combination.
 	IsAllowed func(policyURI string, mode ua.MessageSecurityMode) bool
 	// VerifyCertificate validates the client certificate (chain). It returns nil
@@ -58,7 +67,8 @@ type Channel struct {
 	mode       ua.MessageSecurityMode
 	remoteCert *x509.Certificate
 	remoteDER  []byte // as sent by the client (may contain a chain)
-	remotePub  *rsa.PublicKey
+	remotePub  crypto.PublicKey
+	local      *Credential // server certificate and key for the policy
 
 	mu          sync.Mutex
 	tokens      []*token // tokens accepted for receiving, newest last
@@ -66,9 +76,10 @@ type Channel struct {
 	nextTokenID uint32
 	lastRecvSeq uint32
 	haveRecvSeq bool
+	legacySeq   bool // RSA and None policies use legacy sequence numbers
 
 	sendMu  sync.Mutex
-	sendSeq uint32
+	sendSeq uint32 // next sequence number to send (non legacy) or last sent (legacy)
 
 	chunks     map[uint32][][]byte
 	chunkBytes map[uint32]int
@@ -86,7 +97,7 @@ type Request struct {
 // NewChannel creates a server side channel on an accepted connection.
 func NewChannel(conn *uacp.Conn, id uint32, cfg *Config) *Channel {
 	return &Channel{
-		conn: conn, cfg: cfg, id: id, nextTokenID: 1, sendSeq: 0,
+		conn: conn, cfg: cfg, id: id, nextTokenID: 1, sendSeq: 0, legacySeq: true,
 		chunks: map[uint32][][]byte{}, chunkBytes: map[uint32]int{}, closed: make(chan struct{}),
 		policy: PolicyByURI(SecurityPolicyNone),
 	}
@@ -237,10 +248,14 @@ func (c *Channel) handleOpen(ch *uacp.Chunk, first bool) error {
 	if policy.IsNone() {
 		plain = data[hdrEnd:]
 	} else {
-		if c.cfg.PrivateKey == nil {
-			return c.fail(ua.StatusBadSecurityPolicyRejected, "server has no certificate")
+		local := c.local
+		if first && c.cfg.Credentials != nil {
+			local = c.cfg.Credentials(policy.URI)
 		}
-		ownThumb := sha1.Sum(c.cfg.Certificate)
+		if local == nil {
+			return c.fail(ua.StatusBadSecurityPolicyRejected, "server has no certificate for the policy")
+		}
+		ownThumb := sha1.Sum(local.Certificate)
 		if string(thumbprint) != string(ownThumb[:]) {
 			return c.fail(ua.StatusBadSecurityChecksFailed, "receiver certificate thumbprint mismatch")
 		}
@@ -248,12 +263,9 @@ func (c *Channel) handleOpen(ch *uacp.Chunk, first bool) error {
 		if err != nil || len(chain) == 0 {
 			return c.fail(ua.StatusBadCertificateInvalid, "invalid client certificate")
 		}
-		pub, ok := chain[0].PublicKey.(*rsa.PublicKey)
-		if !ok {
-			return c.fail(ua.StatusBadCertificateInvalid, "client certificate is not RSA")
-		}
-		if bits := pub.N.BitLen(); bits < policy.MinAsymKeyBits || bits > policy.MaxAsymKeyBits {
-			return c.fail(ua.StatusBadCertificatePolicyCheckFailed, "client key length not allowed by policy")
+		pub := chain[0].PublicKey
+		if !policy.CertificateKeyAllowed(pub) {
+			return c.fail(ua.StatusBadCertificatePolicyCheckFailed, "client certificate key not allowed by policy")
 		}
 		if !first && string(chain[0].Raw) != string(c.remoteCert.Raw) {
 			return c.fail(ua.StatusBadSecurityChecksFailed, "client certificate changed")
@@ -269,36 +281,55 @@ func (c *Channel) handleOpen(ch *uacp.Chunk, first bool) error {
 				return c.fail(code, "client certificate rejected")
 			}
 		}
-		pt, err := policy.AsymDecrypt(c.cfg.PrivateKey, data[hdrEnd:])
-		if err != nil {
-			return c.fail(ua.StatusBadSecurityChecksFailed, "decryption failed")
+		sigLen := policy.AsymSignatureLength(pub)
+		if policy.IsECC() {
+			// ECC: the message is signed but not encrypted and has no padding.
+			if len(data) < hdrEnd+8+sigLen {
+				return c.fail(ua.StatusBadSecurityChecksFailed, "message too short")
+			}
+			if err := policy.AsymVerify(pub, data[:len(data)-sigLen], data[len(data)-sigLen:]); err != nil {
+				return c.fail(ua.StatusBadSecurityChecksFailed, "invalid signature")
+			}
+			plain = data[hdrEnd : len(data)-sigLen]
+		} else {
+			rsaKey, _ := local.PrivateKey.(*rsa.PrivateKey)
+			pt, err := policy.AsymDecrypt(rsaKey, data[hdrEnd:])
+			if err != nil {
+				return c.fail(ua.StatusBadSecurityChecksFailed, "decryption failed")
+			}
+			if len(pt) < 8+sigLen+1 {
+				return c.fail(ua.StatusBadSecurityChecksFailed, "message too short")
+			}
+			signed := make([]byte, 0, hdrEnd+len(pt))
+			signed = append(signed, data[:hdrEnd]...)
+			signed = append(signed, pt[:len(pt)-sigLen]...)
+			if err := policy.AsymVerify(pub, signed, pt[len(pt)-sigLen:]); err != nil {
+				return c.fail(ua.StatusBadSecurityChecksFailed, "invalid signature")
+			}
+			pt = pt[:len(pt)-sigLen]
+			padLen := int(pt[len(pt)-1])
+			sizeBytes := 1
+			if rsaKey.Size() > 256 {
+				padLen = int(pt[len(pt)-2]) | int(pt[len(pt)-1])<<8
+				sizeBytes = 2
+			}
+			if len(pt) < 8+padLen+sizeBytes {
+				return c.fail(ua.StatusBadSecurityChecksFailed, "invalid padding")
+			}
+			plain = pt[:len(pt)-padLen-sizeBytes]
 		}
-		sigLen := pub.Size()
-		if len(pt) < 8+sigLen+1 {
-			return c.fail(ua.StatusBadSecurityChecksFailed, "message too short")
-		}
-		signed := make([]byte, 0, hdrEnd+len(pt))
-		signed = append(signed, data[:hdrEnd]...)
-		signed = append(signed, pt[:len(pt)-sigLen]...)
-		if err := policy.AsymVerify(pub, signed, pt[len(pt)-sigLen:]); err != nil {
-			return c.fail(ua.StatusBadSecurityChecksFailed, "invalid signature")
-		}
-		pt = pt[:len(pt)-sigLen]
-		padLen := int(pt[len(pt)-1])
-		sizeBytes := 1
-		if c.cfg.PrivateKey.Size() > 256 {
-			padLen = int(pt[len(pt)-2]) | int(pt[len(pt)-1])<<8
-			sizeBytes = 2
-		}
-		if len(pt) < 8+padLen+sizeBytes {
-			return c.fail(ua.StatusBadSecurityChecksFailed, "invalid padding")
-		}
-		plain = pt[:len(pt)-padLen-sizeBytes]
 		if first {
 			c.remoteDER = senderCert
 			c.remoteCert = chain[0]
 			c.remotePub = pub
+			c.local = local
 		}
+	}
+	if first {
+		// ECC policies use non legacy sequence numbers starting at 0 (Part 6, 6.7.2.4).
+		c.mu.Lock()
+		c.legacySeq = !policy.IsECC()
+		c.mu.Unlock()
 	}
 	if len(plain) < 8 {
 		return c.fail(ua.StatusBadDecodingError, "message too short")
@@ -336,6 +367,14 @@ func (c *Channel) handleOpen(ch *uacp.Chunk, first bool) error {
 	if !policy.IsNone() && len(req.ClientNonce) < policy.NonceLength {
 		return c.fail(ua.StatusBadNonceInvalid, "client nonce too short")
 	}
+	var clientEphemeral *ecdh.PublicKey
+	if policy.IsECC() {
+		k, err := policy.ParseNonce(req.ClientNonce)
+		if err != nil {
+			return c.fail(ua.StatusBadNonceInvalid, "client nonce is not a valid ephemeral key")
+		}
+		clientEphemeral = k
+	}
 
 	lifetime := req.RequestedLifetime
 	if lifetime == 0 || lifetime > c.cfg.MaxTokenLifetime {
@@ -347,7 +386,21 @@ func (c *Channel) handleOpen(ch *uacp.Chunk, first bool) error {
 
 	var serverNonce []byte
 	tok := &token{created: time.Now(), lifetime: time.Duration(lifetime) * time.Millisecond}
-	if !policy.IsNone() {
+	switch {
+	case policy.IsECC():
+		// ECDH with ephemeral keys exchanged as nonces, then HKDF (Part 6, 6.8.1).
+		eph, nonce, err := policy.NewEphemeralKey()
+		if err != nil {
+			return c.fail(ua.StatusBadInternalError, "ephemeral key generation failed")
+		}
+		secret, err := eph.ECDH(clientEphemeral)
+		if err != nil {
+			return c.fail(ua.StatusBadNonceInvalid, "key agreement failed")
+		}
+		serverNonce = nonce
+		signOnly := req.SecurityMode == ua.MessageSecurityModeSign
+		tok.remote, tok.local = policy.DeriveECCKeys(secret, req.ClientNonce, serverNonce, signOnly)
+	case !policy.IsNone():
 		serverNonce = NewNonce(policy.NonceLength)
 		// Client keys: secret=ServerNonce, seed=ClientNonce. Server keys: the reverse.
 		tok.remote = policy.DeriveKeys(serverNonce, req.ClientNonce)
@@ -396,24 +449,46 @@ func (c *Channel) handleOpen(ch *uacp.Chunk, first bool) error {
 	return c.sendAsymmetric(reqID, resp)
 }
 
+// checkSeq validates a received sequence number (Part 6, 6.7.2.4).
 func (c *Channel) checkSeq(seq uint32, first bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.haveRecvSeq || first {
+		// Non legacy (ECC) sequence numbers must start at 0.
+		if first && !c.legacySeq && seq != 0 {
+			return c.fail(ua.StatusBadSequenceNumberInvalid, "first sequence number must be 0")
+		}
 		c.lastRecvSeq = seq
 		c.haveRecvSeq = true
 		return nil
 	}
-	expected := c.lastRecvSeq + 1
-	// Sequence numbers may wrap around after 4294966271 (UInt32.MaxValue - 1024).
-	if seq != expected && !(c.lastRecvSeq > 4294966271 && seq < 1024) {
+	ok := seq == c.lastRecvSeq+1 && c.lastRecvSeq != 0xFFFFFFFF
+	if !ok {
+		if c.legacySeq {
+			// Legacy numbers wrap after UInt32.MaxValue - 1024 to a value below 1024.
+			ok = c.lastRecvSeq > 4294966271 && seq < 1024
+		} else {
+			// Non legacy numbers wrap from UInt32.MaxValue to 0.
+			ok = c.lastRecvSeq == 0xFFFFFFFF && seq == 0
+		}
+	}
+	if !ok {
 		return c.fail(ua.StatusBadSequenceNumberInvalid, "invalid sequence number")
 	}
 	c.lastRecvSeq = seq
 	return nil
 }
 
+// nextSendSeq returns the sequence number of the next chunk (called with sendMu held).
 func (c *Channel) nextSendSeq() uint32 {
+	c.mu.Lock()
+	legacy := c.legacySeq
+	c.mu.Unlock()
+	if !legacy {
+		v := c.sendSeq // starts at 0 and wraps from UInt32.MaxValue to 0
+		c.sendSeq++
+		return v
+	}
 	c.sendSeq++
 	if c.sendSeq > 4294966271 {
 		c.sendSeq = 1
@@ -438,7 +513,7 @@ func (c *Channel) sendAsymmetric(reqID uint32, msg ua.Structure) error {
 		hdr.WriteByteString(nil)
 		hdr.WriteByteString(nil)
 	} else {
-		hdr.WriteByteString(c.cfg.Certificate)
+		hdr.WriteByteString(c.local.Certificate)
 		thumb := sha1.Sum(c.remoteCert.Raw)
 		hdr.WriteByteString(thumb[:])
 	}
@@ -449,12 +524,28 @@ func (c *Channel) sendAsymmetric(reqID uint32, msg ua.Structure) error {
 	plain.WriteRaw(body.Bytes())
 
 	var out []byte
-	if c.policy.IsNone() {
+	switch {
+	case c.policy.IsNone():
 		out = append(hdr.Bytes(), plain.Bytes()...)
-	} else {
-		pub := c.remotePub
+	case c.policy.IsECC():
+		// Signed, not encrypted, no padding.
+		sigLen := c.policy.AsymSignatureLength(c.local.PrivateKey.Public())
+		hb := hdr.Bytes()
+		total := len(hb) + plain.Len() + sigLen
+		if total > int(c.conn.SendBufferSize) {
+			return fmt.Errorf("uasc: OPN response exceeds send buffer")
+		}
+		binary.LittleEndian.PutUint32(hb[4:], uint32(total))
+		out = append(hb, plain.Bytes()...)
+		sig, err := c.policy.AsymSign(c.local.PrivateKey, out)
+		if err != nil {
+			return err
+		}
+		out = append(out, sig...)
+	default:
+		pub := c.remotePub.(*rsa.PublicKey)
 		pb := c.policy.AsymPlainBlockSize(pub)
-		sigLen := c.cfg.PrivateKey.Size()
+		sigLen := c.policy.AsymSignatureLength(c.local.PrivateKey.Public())
 		sizeBytes := 1
 		if pub.Size() > 256 {
 			sizeBytes = 2
@@ -476,7 +567,7 @@ func (c *Channel) sendAsymmetric(reqID uint32, msg ua.Structure) error {
 		hb := hdr.Bytes()
 		binary.LittleEndian.PutUint32(hb[4:], uint32(total))
 		signed := append(append([]byte{}, hb...), plain.Bytes()...)
-		sig, err := c.policy.AsymSign(c.cfg.PrivateKey, signed)
+		sig, err := c.policy.AsymSign(c.local.PrivateKey, signed)
 		if err != nil {
 			return err
 		}

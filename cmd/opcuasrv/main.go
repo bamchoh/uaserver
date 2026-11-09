@@ -35,6 +35,8 @@ func main() {
 		{PolicyURI: uasc.SecurityPolicyBasic256Sha256, Modes: both},
 		{PolicyURI: uasc.SecurityPolicyAes128Sha256RsaOaep, Modes: both},
 		{PolicyURI: uasc.SecurityPolicyAes256Sha256RsaPss, Modes: both},
+		{PolicyURI: uasc.SecurityPolicyEccNistP256, Modes: both},
+		{PolicyURI: uasc.SecurityPolicyEccNistP384, Modes: both},
 	}
 	if !*noNone {
 		security = append([]server.SecurityConfig{{PolicyURI: uasc.SecurityPolicyNone,
