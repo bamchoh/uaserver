@@ -194,9 +194,15 @@ func NewByteArrayVariant(b []byte) Variant { return Variant{typ: TypeByte, isArr
 // NewMatrixVariant returns a multi-dimensional array Variant. flat must be a slice
 // as accepted by NewVariant and its length must equal the product of dims.
 func NewMatrixVariant(flat any, dims []int32) (Variant, error) {
-	v, err := TryVariant(flat)
-	if err != nil {
-		return v, err
+	var v Variant
+	if b, ok := flat.([]byte); ok {
+		// A []byte is a ByteString scalar for NewVariant; here it is a Byte array.
+		v = NewByteArrayVariant(b)
+	} else {
+		var err error
+		if v, err = TryVariant(flat); err != nil {
+			return v, err
+		}
 	}
 	if !v.isArray {
 		return v, fmt.Errorf("ua: matrix value must be a slice")

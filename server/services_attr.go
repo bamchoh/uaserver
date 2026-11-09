@@ -404,6 +404,20 @@ func (s *Server) checkValueType(n *Node, v ua.Variant) ua.StatusCode {
 		return ua.StatusBadTypeMismatch
 	case rank == 0 && !v.IsArray():
 		return ua.StatusBadTypeMismatch
+	case rank == 1 && v.ValueRank() != 1:
+		return ua.StatusBadTypeMismatch
+	}
+	// ArrayDimensions gives the maximum length of each dimension (0 = any).
+	if v.IsArray() && len(n.ArrayDimensions) == int(v.ValueRank()) {
+		dims := v.Dimensions()
+		if dims == nil {
+			dims = []int32{int32(v.ArrayLength())}
+		}
+		for i, max := range n.ArrayDimensions {
+			if max != 0 && uint32(dims[i]) > max {
+				return ua.StatusBadTypeMismatch
+			}
+		}
 	}
 	// Data type.
 	dt := n.DataType

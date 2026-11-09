@@ -133,3 +133,53 @@ func TestCallMethod(t *testing.T) {
 		t.Fatalf("expected BadArgumentsMissing, got %s", r.StatusCode)
 	}
 }
+
+func TestMatrixVariables(t *testing.T) {
+	s := newTestServer(t)
+	ns := s.as.RegisterNamespace("urn:test")
+	mid := ua.NewStringNodeId(ns, "m")
+	m, err := ua.NewMatrixVariant([]byte{0, 1, 2, 3, 4, 5}, []int32{2, 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.as.AddVariable(ObjectsFolder, mid, ua.NewQualifiedName(ns, "m"), m,
+		VariableOptions{AccessLevel: AccessCurrentRead | AccessCurrentWrite}); err != nil {
+		t.Fatal(err)
+	}
+	sess := &Session{srv: s, browseCPs: map[string]*browseCP{}}
+	rr := s.read(sess, &ua.ReadRequest{TimestampsToReturn: ua.TimestampsToReturnNeither, NodesToRead: []ua.ReadValueId{
+		{NodeId: mid, AttributeId: AttrValue},
+		{NodeId: mid, AttributeId: AttrValueRank},
+		{NodeId: mid, AttributeId: AttrArrayDimensions},
+		{NodeId: mid, AttributeId: AttrDataType},
+	}}).(*ua.ReadResponse)
+	r := rr.Results
+	if v := r[0].Value; v.Type() != ua.TypeByte || !v.IsArray() || len(v.Dimensions()) != 2 {
+		t.Fatalf("matrix value %#v", v)
+	}
+	if r[1].Value.Value() != int32(2) || len(r[2].Value.Value().([]uint32)) != 2 || r[3].Value.Value() != nid(id.Byte) {
+		t.Fatalf("matrix attributes %+v", r[1:])
+	}
+
+	write := func(v ua.Variant) ua.StatusCode {
+		wr := s.write(sess, &ua.WriteRequest{NodesToWrite: []ua.WriteValue{
+			{NodeId: mid, AttributeId: AttrValue, Value: ua.NewDataValue(v)}}}).(*ua.WriteResponse)
+		return wr.Results[0]
+	}
+	smaller, _ := ua.NewMatrixVariant([]byte{9, 9}, []int32{1, 2})
+	bigger, _ := ua.NewMatrixVariant(make([]byte, 8), []int32{2, 4})
+	cube, _ := ua.NewMatrixVariant(make([]byte, 8), []int32{2, 2, 2})
+	if st := write(smaller); st != 0 {
+		t.Fatalf("smaller matrix: %s", st)
+	}
+	for name, v := range map[string]ua.Variant{
+		"larger than ArrayDimensions": bigger,
+		"wrong rank":                  cube,
+		"one dimensional":             ua.NewByteArrayVariant([]byte{1, 2}),
+		"scalar":                      ua.NewVariant(byte(1)),
+	} {
+		if st := write(v); st != ua.StatusBadTypeMismatch {
+			t.Errorf("%s: got %s, want BadTypeMismatch", name, st)
+		}
+	}
+}

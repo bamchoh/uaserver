@@ -196,7 +196,7 @@ async Task RunCase(string policy, MessageSecurityMode mode, IUserIdentity user, 
         new ReadValueId { NodeId = VariableIds.Server_ServerStatus, AttributeId = Attributes.Value },
         new ReadValueId { NodeId = VariableIds.Server_NamespaceArray, AttributeId = Attributes.Value },
         new ReadValueId { NodeId = new NodeId("Demo.Static.String", ns), AttributeId = Attributes.Value },
-        new ReadValueId { NodeId = new NodeId("Demo.Static.Int32Array", ns), AttributeId = Attributes.Value, IndexRange = "1:2" },
+        new ReadValueId { NodeId = new NodeId("Demo.Arrays.Int32Array", ns), AttributeId = Attributes.Value, IndexRange = "1:2" },
         new ReadValueId { NodeId = new NodeId("Demo.Static.LocalizedText", ns), AttributeId = Attributes.Value },
         new ReadValueId { NodeId = DataTypeIds.BuildInfo, AttributeId = Attributes.DataTypeDefinition },
         new ReadValueId { NodeId = new NodeId("NoSuchNode", ns), AttributeId = Attributes.Value },
@@ -221,6 +221,64 @@ async Task RunCase(string policy, MessageSecurityMode mode, IUserIdentity user, 
     Check(wres[2] == StatusCodes.BadNotWritable, "write read-only: " + wres[2]);
     var back = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, new[] { new ReadValueId { NodeId = int32Id, AttributeId = Attributes.Value } }, ct);
     Check(back.Results[0].WrappedValue.ToString() == "1234", "read back: " + back.Results[0].WrappedValue);
+
+    // Every demo variable must be readable and decodable.
+    foreach (string folder in new[] { "Static", "Arrays", "Matrices", "Structures" })
+    {
+        var fb = await session.BrowseAsync(null, null, 0, new[] { new BrowseDescription {
+            NodeId = new NodeId("Demo." + folder, ns), BrowseDirection = BrowseDirection.Forward,
+            ReferenceTypeId = ReferenceTypeIds.Organizes, IncludeSubtypes = true,
+            NodeClassMask = (uint)NodeClass.Variable, ResultMask = (uint)BrowseResultMask.All } }, ct);
+        var vars = fb.Results[0].References.ToArray();
+        Check(vars.Length > 0, "browse Demo." + folder);
+        var all = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, vars.Select(r => new ReadValueId {
+            NodeId = ExpandedNodeId.ToNodeId(r.NodeId, session.NamespaceUris), AttributeId = Attributes.Value }).ToArray(), ct);
+        var allRes = all.Results.ToArray();
+        for (int i = 0; i < vars.Length; i++)
+            Check(StatusCode.IsGood(allRes[i].StatusCode) && !allRes[i].WrappedValue.IsNull,
+                $"read Demo.{folder}.{vars[i].BrowseName.Name}: {allRes[i].StatusCode}");
+    }
+
+    // Byte array, matrices and structures.
+    NodeId Demo(string path) => new NodeId("Demo." + path, ns);
+    var mr = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, new[] {
+        new ReadValueId { NodeId = Demo("Arrays.ByteArray"), AttributeId = Attributes.Value },
+        new ReadValueId { NodeId = Demo("Matrices.Int32Matrix3D"), AttributeId = Attributes.Value },
+        new ReadValueId { NodeId = Demo("Matrices.Int32Matrix3D"), AttributeId = Attributes.ValueRank },
+        new ReadValueId { NodeId = Demo("Matrices.Int32Matrix3D"), AttributeId = Attributes.ArrayDimensions },
+        new ReadValueId { NodeId = Demo("Matrices.ByteMatrix2D"), AttributeId = Attributes.Value },
+        new ReadValueId { NodeId = Demo("Structures.Range"), AttributeId = Attributes.Value },
+    }, ct);
+    var m = mr.Results.ToArray();
+    var byteArray = m[0].WrappedValue;
+    Check(byteArray.TypeInfo.BuiltInType == BuiltInType.Byte && byteArray.TypeInfo.IsArray,
+        "ByteArray is Byte[] (not ByteString): " + byteArray.TypeInfo);
+    var cube = (int[,,])m[1].WrappedValue.GetInt32Matrix(default);
+    Check(cube.GetLength(0) == 2 && cube.GetLength(1) == 3 && cube.GetLength(2) == 4 && cube[1, 2, 3] == 23,
+        "Int32Matrix3D [2,3,4] row-major");
+    Check(m[2].WrappedValue.ToString() == "3", "Int32Matrix3D ValueRank: " + m[2].WrappedValue);
+    Check(m[3].WrappedValue.ToString().Contains('2') && m[3].WrappedValue.ToString().Contains('4'),
+        "Int32Matrix3D ArrayDimensions: " + m[3].WrappedValue);
+    var bm = (byte[,])m[4].WrappedValue.GetByteMatrix(default);
+    Check(bm.GetLength(0) == 4 && bm[3, 2] == 14, "ByteMatrix2D [4,4]");
+    Check(m[5].WrappedValue.TryGetStructure(out Opc.Ua.Range? range) && range!.High == 100, "Range structure: " + m[5].WrappedValue);
+
+    // Write a matrix and read it back; a matrix larger than ArrayDimensions is rejected.
+    var newMatrix = new int[3, 4];
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 4; j++) newMatrix[i, j] = 100 + i * 4 + j;
+    var mw = await session.WriteAsync(null, new[] {
+        new WriteValue { NodeId = Demo("Matrices.Int32Matrix2D"), AttributeId = Attributes.Value,
+            Value = new DataValue(new Variant(MatrixOf.From<int>(newMatrix))) },
+        new WriteValue { NodeId = Demo("Matrices.Int32Matrix2D"), AttributeId = Attributes.Value,
+            Value = new DataValue(new Variant(MatrixOf.From<int>(new int[5, 5]))) },
+    }, ct);
+    var mwr = mw.Results.ToArray();
+    Check(StatusCode.IsGood(mwr[0]), "write matrix: " + mwr[0]);
+    Check(mwr[1] == StatusCodes.BadTypeMismatch, "write oversized matrix: " + mwr[1]);
+    var mb = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, new[] {
+        new ReadValueId { NodeId = Demo("Matrices.Int32Matrix2D"), AttributeId = Attributes.Value } }, ct);
+    var back2 = (int[,])mb.Results[0].WrappedValue.GetInt32Matrix(default);
+    Check(back2[2, 3] == 111, "matrix read back");
 
     // Call method.
     var cr = await session.CallAsync(null, new[] { new CallMethodRequest {

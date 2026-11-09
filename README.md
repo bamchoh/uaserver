@@ -45,6 +45,23 @@ go run ./cmd/opcuasrv -addr :4840
 セキュアな接続をすると、初回はクライアント証明書が `pki/rejected/certs` に保存されて拒否されます。
 そのファイルを `pki/trusted/certs` に移すと、再起動なしで接続できるようになります。
 
+### デモのアドレス空間
+
+`Objects/Demo` 以下に、動作確認用の変数があります（名前空間 `urn:opcuasrv:demo`、NodeId は `s=Demo.<フォルダ>.<名前>`）。
+Dynamic と Methods 以外の変数は書き込みもできます。
+
+| フォルダ | 内容 |
+|---|---|
+| `Static` | 全組み込み型のスカラー（Boolean〜UInt64、Float、Double、String、DateTime、Guid、ByteString、XmlElement、LocalizedText、QualifiedName、NodeId、ExpandedNodeId、StatusCode） |
+| `Arrays` | 全組み込み型の 1 次元配列。`ByteArray` は ByteString ではなく Byte の配列 |
+| `Matrices` | 2 次元配列（Byte 4×4、Int32 3×4、Double 2×3、Boolean 2×2、String 2×3）と 3 次元配列（Byte 2×2×3、Int32 2×3×4、Float 2×2×2） |
+| `Structures` | 構造体（Range、Range の配列、EUInformation、TimeZoneDataType）と列挙型（NodeClass） |
+| `Dynamic` | 0.5 秒ごとに変わる Counter と Sine、読むたびに現在時刻を返す Time |
+| `Methods` | `Add(a, b)` メソッド |
+
+多次元配列の要素は行優先（最後の添字が最も速く変わる）で 0 から番号を振っているので、3×4 の行列の `[i][j]` は `i*4+j` です。
+書き込める行列の大きさは ArrayDimensions（宣言時の大きさ）以下です。
+
 ### ライブラリとして使う
 
 ```go
