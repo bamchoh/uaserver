@@ -5,8 +5,8 @@ import (
 	"log"
 	"testing"
 
-	"opcuasrv/ua"
-	"opcuasrv/ua/id"
+	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uaserver/ua/id"
 )
 
 func newTestServer(t *testing.T) *Server {

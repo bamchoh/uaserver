@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"opcuasrv/ua"
-	"opcuasrv/ua/id"
+	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uaserver/ua/id"
 )
 
 // Attribute ids (Part 6, A.1).

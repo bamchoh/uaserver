@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"opcuasrv/ua"
-	"opcuasrv/uasc"
+	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uaserver/uasc"
 )
 
 const (

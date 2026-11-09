@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"opcuasrv/server"
-	"opcuasrv/ua"
-	uaid "opcuasrv/ua/id"
-	"opcuasrv/uasc"
+	"github.com/bamchoh/uaserver/server"
+	"github.com/bamchoh/uaserver/ua"
+	uaid "github.com/bamchoh/uaserver/ua/id"
+	"github.com/bamchoh/uaserver/uasc"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-# opcuasrv
+# uaserver
 
 [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard) のサーバー機能を Go に移植したものです。
 外部ライブラリには依存せず、標準ライブラリだけで書いています。
@@ -63,6 +63,12 @@ Dynamic と Methods 以外の変数は書き込みもできます。
 書き込める行列の大きさは ArrayDimensions（宣言時の大きさ）以下です。
 
 ### ライブラリとして使う
+
+```sh
+go get github.com/bamchoh/uaserver/server
+```
+
+パッケージは `github.com/bamchoh/uaserver/server`（サーバー）、`.../ua`（型とエンコーディング）、`.../uasc`（セキュリティポリシー）です。
 
 ```go
 srv, _ := server.New(server.Config{

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"opcuasrv/ua"
-	"opcuasrv/ua/id"
+	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uaserver/ua/id"
 )
 
 // Reference is a reference from a node to another node.

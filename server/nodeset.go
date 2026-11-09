@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"opcuasrv/ua"
+	"github.com/bamchoh/uaserver/ua"
 )
 
 //go:embed ns0/Opc.Ua.NodeSet2.xml.gz

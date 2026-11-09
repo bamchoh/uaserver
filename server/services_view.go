@@ -3,8 +3,8 @@ package server
 import (
 	"encoding/binary"
 
-	"opcuasrv/ua"
-	"opcuasrv/ua/id"
+	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uaserver/ua/id"
 )
 
 type browseCP struct {

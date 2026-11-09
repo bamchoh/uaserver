@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"opcuasrv/ua"
-	"opcuasrv/uacp"
+	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uaserver/uacp"
 )
 
 // Credential is an application instance certificate with its private key.

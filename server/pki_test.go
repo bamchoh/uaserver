@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"opcuasrv/ua"
+	"github.com/bamchoh/uaserver/ua"
 )
 
 // newUserCert creates a self-signed certificate without an application URI,

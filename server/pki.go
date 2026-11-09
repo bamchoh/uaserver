@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"opcuasrv/ua"
+	"github.com/bamchoh/uaserver/ua"
 )
 
 // CertificateStore manages the application instance certificate and the

@@ -19,7 +19,7 @@ import (
 	"hash"
 	"math/big"
 
-	"opcuasrv/ua"
+	"github.com/bamchoh/uaserver/ua"
 )
 
 // Security policy URIs.
