@@ -43,7 +43,14 @@ type monitoredItem struct {
 	trigger       ua.DataChangeTrigger
 	deadband      float64 // absolute deadband, 0 = none
 
+	// eventDriven items watch a stored variable value: changes are reported
+	// as soon as they are stored (rate limited by interval), and the item is
+	// only polled for its initial value or a deferred change.
+	eventDriven bool
+
 	nextSample time.Time
+	lastSample time.Time
+	pending    bool // a change arrived within interval and waits for the next sample
 	last       ua.DataValue
 	hasLast    bool
 	queue      []ua.MonitoredItemNotification
@@ -70,15 +77,35 @@ type subscription struct {
 	late           bool
 	firstCycle     bool
 	nextPublish    time.Time
+	lastPublish    time.Time // when the last notification message or keep-alive was built
 	statusChange   *ua.StatusChangeNotification
 
+	wake    chan struct{} // signalled when new notifications are queued
+	kick    chan struct{} // signalled when items need their initial sample
 	stopCh  chan struct{}
 	stopped atomic.Bool
 }
 
 func (sub *subscription) stop() {
 	if sub.stopped.CompareAndSwap(false, true) {
+		sub.srv.monitors.removeSub(sub)
 		close(sub.stopCh)
+	}
+}
+
+// kickSampling asks the subscription loop to sample new or re-enabled items now.
+func (sub *subscription) kickSampling() {
+	select {
+	case sub.kick <- struct{}{}:
+	default:
+	}
+}
+
+// wakeUp asks the subscription loop to publish queued notifications now.
+func (sub *subscription) wakeUp() {
+	select {
+	case sub.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -141,7 +168,8 @@ func (s *Server) createSubscription(sess *Session, r *ua.CreateSubscriptionReque
 	}
 	sub := &subscription{
 		id: s.nextSubID.Add(1), srv: s, items: map[uint32]*monitoredItem{},
-		priority: r.Priority, enabled: r.PublishingEnabled, firstCycle: true, stopCh: make(chan struct{}),
+		priority: r.Priority, enabled: r.PublishingEnabled, firstCycle: true,
+		stopCh: make(chan struct{}), wake: make(chan struct{}, 1), kick: make(chan struct{}, 1),
 	}
 	sub.sess.Store(sess)
 	s.reviseSubscription(sub, r.RequestedPublishingInterval, r.RequestedLifetimeCount, r.RequestedMaxKeepAliveCount, r.MaxNotificationsPerPublish)
@@ -350,6 +378,10 @@ func (s *Server) validateItem(sess *Session, sub *subscription, rv ua.ReadValueI
 		return ua.StatusBadMonitoredItemFilterUnsupported
 	}
 
+	// Values stored in the address space are reported when they change
+	// (sampling interval 0 = every change). Values provided by OnRead and
+	// other attributes cannot be observed and are polled.
+	it.eventDriven = rv.AttributeId == AttrValue && n.OnRead == nil
 	iv := time.Duration(p.SamplingInterval * float64(time.Millisecond))
 	if p.SamplingInterval < 0 || math.IsNaN(p.SamplingInterval) {
 		iv = sub.interval
@@ -357,7 +389,7 @@ func (s *Server) validateItem(sess *Session, sub *subscription, rv ua.ReadValueI
 	if min := time.Duration(n.MinimumSamplingInterval * float64(time.Millisecond)); iv < min {
 		iv = min
 	}
-	if iv < s.cfg.MinSamplingInterval {
+	if !it.eventDriven && iv < s.cfg.MinSamplingInterval {
 		iv = s.cfg.MinSamplingInterval
 	}
 	if iv > maxInterval {
@@ -413,6 +445,10 @@ func (s *Server) createMonitoredItems(sess *Session, r *ua.CreateMonitoredItemsR
 		sub.nextItemID++
 		it.id = sub.nextItemID
 		sub.items[it.id] = it
+		if it.eventDriven {
+			s.monitors.add(sub, it, it.rv.NodeId)
+		}
+		sub.kickSampling()
 		results[i] = ua.MonitoredItemCreateResult{
 			MonitoredItemId:         it.id,
 			RevisedSamplingInterval: float64(it.interval) / float64(time.Millisecond),
@@ -484,6 +520,7 @@ func (s *Server) setMonitoringMode(sess *Session, r *ua.SetMonitoringModeRequest
 			it.hasLast = false
 		} else if it.mode == ua.MonitoringModeDisabled {
 			it.nextSample = time.Time{}
+			sub.kickSampling()
 		}
 		it.mode = r.MonitoringMode
 	}
@@ -503,11 +540,13 @@ func (s *Server) deleteMonitoredItems(sess *Session, r *ua.DeleteMonitoredItemsR
 	}
 	results := make([]ua.StatusCode, len(r.MonitoredItemIds))
 	for i, id := range r.MonitoredItemIds {
-		if sub.items[id] == nil {
+		it := sub.items[id]
+		if it == nil {
 			results[i] = ua.StatusBadMonitoredItemIdInvalid
 			continue
 		}
 		delete(sub.items, id)
+		s.monitors.remove(sub, it)
 	}
 	return &ua.DeleteMonitoredItemsResponse{ResponseHeader: respHeader(hdr, 0), Results: results}
 }
@@ -618,19 +657,42 @@ func (it *monitoredItem) enqueue(dv ua.DataValue) {
 }
 
 func (sub *subscription) run() {
-	tick := time.NewTicker(sub.srv.cfg.MinSamplingInterval)
-	defer tick.Stop()
+	// Polling for values that cannot report changes (OnRead, non-Value attributes).
+	poll := time.NewTicker(sub.srv.cfg.MinSamplingInterval)
+	defer poll.Stop()
+	// Regular publishing cycle (keep-alives, lifetime, queued notifications).
+	cycle := time.NewTimer(sub.cycleWait())
+	defer cycle.Stop()
+	sub.sampleItems(time.Now(), nil) // initial values
 	for {
 		select {
 		case <-sub.stopCh:
 			return
 		case <-sub.srv.closed:
 			return
-		case now := <-tick.C:
-			sub.sample(now)
+		case now := <-poll.C:
+			if sub.sampleItems(now, nil) {
+				sub.publishEarly(now)
+			}
+		case <-sub.wake:
+			sub.publishEarly(time.Now())
+		case <-sub.kick:
+			now := time.Now()
+			if sub.sampleItems(now, nil) {
+				sub.publishEarly(now)
+			}
+		case now := <-cycle.C:
 			sub.publishCycle(now)
+			cycle.Reset(sub.cycleWait())
 		}
 	}
+}
+
+// cycleWait returns the time until the next publishing cycle.
+func (sub *subscription) cycleWait() time.Duration {
+	sess := sub.lockSession()
+	defer sess.mu.Unlock()
+	return max(time.Until(sub.nextPublish), time.Millisecond)
 }
 
 type sampleJob struct {
@@ -638,13 +700,17 @@ type sampleJob struct {
 	rv ua.ReadValueId
 }
 
-func (sub *subscription) sample(now time.Time) {
+// sampleItems reads the values of monitored items and queues notifications for
+// changes. With only == nil it samples the items whose sampling time is due;
+// otherwise it samples the given items right away (a reported value change),
+// unless their sampling interval has not elapsed since the last sample.
+// It reports whether a notification was queued.
+func (sub *subscription) sampleItems(now time.Time, only []*monitoredItem) bool {
 	sess := sub.lockSession()
 	var jobs []sampleJob
-	for _, it := range sub.items {
-		if it.mode == ua.MonitoringModeDisabled || now.Before(it.nextSample) {
-			continue
-		}
+	take := func(it *monitoredItem) {
+		it.lastSample = now
+		it.pending = false
 		next := it.nextSample.Add(it.interval)
 		if next.Before(now) {
 			next = now.Add(it.interval)
@@ -652,9 +718,35 @@ func (sub *subscription) sample(now time.Time) {
 		it.nextSample = next
 		jobs = append(jobs, sampleJob{it, it.rv})
 	}
+	if only == nil {
+		for _, it := range sub.items {
+			if it.mode == ua.MonitoringModeDisabled || now.Before(it.nextSample) {
+				continue
+			}
+			// Event driven items are polled only for their initial value or a
+			// change that arrived within the sampling interval.
+			if it.eventDriven && it.hasLast && !it.pending {
+				continue
+			}
+			take(it)
+		}
+	} else {
+		for _, it := range only {
+			if sub.items[it.id] != it || it.mode == ua.MonitoringModeDisabled {
+				continue
+			}
+			if it.interval > 0 && now.Before(it.lastSample.Add(it.interval)) {
+				// Too soon: sample when the interval has elapsed.
+				it.pending = true
+				it.nextSample = it.lastSample.Add(it.interval)
+				continue
+			}
+			take(it)
+		}
+	}
 	sess.mu.Unlock()
 	if len(jobs) == 0 {
-		return
+		return false
 	}
 	values := make([]ua.DataValue, len(jobs))
 	for i, j := range jobs {
@@ -662,6 +754,7 @@ func (sub *subscription) sample(now time.Time) {
 	}
 	sess = sub.lockSession()
 	defer sess.mu.Unlock()
+	queued := false
 	for i, j := range jobs {
 		it := j.it
 		if sub.items[it.id] != it || it.mode == ua.MonitoringModeDisabled {
@@ -672,8 +765,32 @@ func (sub *subscription) sample(now time.Time) {
 			it.last = dv
 			it.hasLast = true
 			it.enqueue(dv)
+			queued = queued || it.mode == ua.MonitoringModeReporting
 		}
 	}
+	return queued
+}
+
+// publishEarly sends queued notifications without waiting for the next
+// publishing cycle, as long as a publishing interval has passed since the
+// last message. Otherwise the regular cycle sends them.
+func (sub *subscription) publishEarly(now time.Time) {
+	sess := sub.lockSession()
+	if !sub.hasNotificationsLocked() || now.Before(sub.lastPublish.Add(sub.interval)) {
+		sess.mu.Unlock()
+		return
+	}
+	p := sess.popPublishLocked()
+	if p == nil {
+		// Served as soon as the client sends a Publish request.
+		sub.late = true
+		sess.mu.Unlock()
+		return
+	}
+	resp := sub.buildPublishLocked(p, now)
+	sub.nextPublish = now.Add(sub.interval)
+	sess.mu.Unlock()
+	p.respond(resp)
 }
 
 func (sub *subscription) hasNotificationsLocked() bool {
@@ -757,6 +874,7 @@ func (sub *subscription) publishCycle(now time.Time) {
 
 // buildPublishLocked creates a publish response (data or keep-alive) for p.
 func (sub *subscription) buildPublishLocked(p *publishReq, now time.Time) *ua.PublishResponse {
+	sub.lastPublish = now
 	sub.keepAliveCtr = 0
 	sub.lifetimeCtr = 0
 	sub.late = false

@@ -76,15 +76,21 @@ type Config struct {
 	// AutoAcceptUntrustedCertificates trusts all client certificates (testing only).
 	AutoAcceptUntrustedCertificates bool
 
-	MaxSessions           int
-	MaxSessionTimeout     time.Duration
-	MinSessionTimeout     time.Duration
-	MaxSubscriptions      int // per session
-	MaxMonitoredItems     int // per subscription
-	MaxOperationsPerCall  int
-	MaxContinuationPts    int
+	MaxSessions          int
+	MaxSessionTimeout    time.Duration
+	MinSessionTimeout    time.Duration
+	MaxSubscriptions     int // per session
+	MaxMonitoredItems    int // per subscription
+	MaxOperationsPerCall int
+	MaxContinuationPts   int
+	// MinPublishingInterval is the shortest publishing interval granted to a
+	// subscription (default 10 ms).
 	MinPublishingInterval time.Duration
-	MinSamplingInterval   time.Duration
+	// MinSamplingInterval is the polling interval for values whose changes
+	// cannot be observed: variables with OnRead and attributes other than
+	// Value (default 50 ms). Values stored with SetValue or written by
+	// clients are reported as soon as they change.
+	MinSamplingInterval time.Duration
 
 	Logger *log.Logger
 }
@@ -162,7 +168,7 @@ func (c *Config) setDefaults() {
 		c.MaxContinuationPts = 10
 	}
 	if c.MinPublishingInterval == 0 {
-		c.MinPublishingInterval = 50 * time.Millisecond
+		c.MinPublishingInterval = 10 * time.Millisecond
 	}
 	if c.MinSamplingInterval == 0 {
 		c.MinSamplingInterval = 50 * time.Millisecond
@@ -192,6 +198,7 @@ type Server struct {
 	ln       net.Listener
 	channels map[uint32]*uasc.Channel
 	sessions *sessionManager
+	monitors *monitorIndex
 	closed   chan struct{}
 	wg       sync.WaitGroup
 	state    atomic.Int32
@@ -238,6 +245,8 @@ func New(cfg Config) (*Server, error) {
 		s.rsaCred = &uasc.Credential{Certificate: der, PrivateKey: key}
 	}
 	s.as = newAddressSpace(cfg.ApplicationURI)
+	s.monitors = newMonitorIndex()
+	s.as.onChange = s.valueChanged
 	if err := loadNS0(s.as); err != nil {
 		return nil, err
 	}

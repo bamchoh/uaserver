@@ -78,6 +78,9 @@ type AddressSpace struct {
 	namespaces []string
 	// subtype cache: reference/data type id -> super type id
 	superTypes map[ua.NodeId]ua.NodeId
+	// onChange is called (without locks held) after a variable value was
+	// stored with SetValue/SetDataValue or written by a client.
+	onChange func(ua.NodeId)
 }
 
 func newAddressSpace(appURI string) *AddressSpace {
@@ -255,20 +258,29 @@ func (a *AddressSpace) SetValue(nid ua.NodeId, v ua.Variant) error {
 }
 
 // SetDataValue sets value, status and timestamps of a variable.
+//
+// Monitored items of the variable are notified right away, without waiting
+// for the next sampling cycle.
 func (a *AddressSpace) SetDataValue(nid ua.NodeId, dv ua.DataValue) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	n := a.nodes[nid]
 	if n == nil {
+		a.mu.Unlock()
 		return ua.StatusBadNodeIdUnknown
 	}
 	if n.Class != ua.NodeClassVariable && n.Class != ua.NodeClassVariableType {
+		a.mu.Unlock()
 		return ua.StatusBadAttributeIdInvalid
 	}
 	if dv.ServerTimestamp.IsZero() {
 		dv.ServerTimestamp = time.Now()
 	}
 	n.value = dv
+	onChange := a.onChange
+	a.mu.Unlock()
+	if onChange != nil {
+		onChange(nid)
+	}
 	return nil
 }
 

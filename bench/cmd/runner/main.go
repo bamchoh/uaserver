@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -38,6 +39,7 @@ import (
 var (
 	scale  = flag.Float64("scale", 1, "multiplier for the number of iterations")
 	only   = flag.String("only", "", "run only the server with this name (uaserver or gopcua)")
+	onlySc = flag.String("scenarios", "", "comma separated scenario keys to run (default: all)")
 	cpu    = flag.String("cpu", "", "CPU description to print in the environment section")
 	output = flag.String("o", "", "also write the Markdown report to this file")
 )
@@ -142,7 +144,8 @@ func main() {
 		{"read-parallel", "Read 1 ノード、8 クライアント並列（None）", scParallelRead(8)},
 		{"write1", "Write 1 ノード（None）", scWrite},
 		{"browse", "Browse 1000 参照のフォルダ（None）", scBrowse},
-		{"sub", "Write から データ変化通知まで（None）", scSubscription},
+		{"sub", "Write から データ変化通知まで、連続で書き込み（None）", scSubscription(0)},
+		{"sub-sparse", "Write から データ変化通知まで、50 ms おきに書き込み（None）", scSubscription(50 * time.Millisecond)},
 	}
 
 	type serverResult struct {
@@ -170,6 +173,9 @@ func main() {
 			sr.err = err
 		} else {
 			for _, sc := range scenarios {
+				if *onlySc != "" && !slices.Contains(strings.Split(*onlySc, ","), sc.key) {
+					continue
+				}
 				log.Printf("  %s", sc.key)
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 				r := sc.run(ctx, e)
@@ -208,6 +214,9 @@ func main() {
 	}
 	b.WriteString("\n")
 	for _, sc := range scenarios {
+		if *onlySc != "" && !slices.Contains(strings.Split(*onlySc, ","), sc.key) {
+			continue
+		}
 		// Percentiles are shown only when every server's median is well above
 		// the timer resolution; otherwise single samples are mostly quantization.
 		showPct := true
@@ -656,7 +665,17 @@ func scBrowse(ctx context.Context, e *env) result {
 	return r
 }
 
-func scSubscription(ctx context.Context, e *env) result {
+// scSubscription measures the time from a Write until the data change
+// notification arrives. With gap 0 the next value is written right after the
+// previous notification, so the publishing interval (10 ms) limits the rate;
+// with a larger gap each change can be sent as soon as it happens.
+func scSubscription(gap time.Duration) func(context.Context, *env) result {
+	return func(ctx context.Context, e *env) result {
+		return subscriptionLatency(ctx, e, gap)
+	}
+}
+
+func subscriptionLatency(ctx context.Context, e *env, gap time.Duration) result {
 	c, err := e.connect(ctx, false)
 	if err != nil {
 		return result{err: err}
@@ -673,7 +692,8 @@ func scSubscription(ctx context.Context, e *env) result {
 	if _, err := sub.Monitor(ctx, ua.TimestampsToReturnBoth, mi); err != nil {
 		return result{err: err}
 	}
-	// waitFor waits until a notification with value want arrives.
+	// waitFor waits until a notification with value want (any value if
+	// want is -1) arrives.
 	waitFor := func(want int32) error {
 		timeout := time.After(5 * time.Second)
 		for {
@@ -684,7 +704,7 @@ func scSubscription(ctx context.Context, e *env) result {
 				}
 				if dcn, ok := nd.Value.(*ua.DataChangeNotification); ok {
 					for _, it := range dcn.MonitoredItems {
-						if v, ok := it.Value.Value.Value().(int32); ok && v == want {
+						if v, ok := it.Value.Value.Value().(int32); ok && (want == -1 || v == want) {
 							return nil
 						}
 					}
@@ -694,11 +714,38 @@ func scSubscription(ctx context.Context, e *env) result {
 			}
 		}
 	}
-	if err := waitFor(2); err != nil { // initial value
+	if err := waitFor(-1); err != nil { // initial value
 		return result{err: err}
 	}
-	r := measure(5, n(100), func(i int) error {
+	var d []time.Duration
+	for i := range n(100) + 5 {
+		if gap > 0 {
+			time.Sleep(gap)
+		}
 		val := int32(100000 + i)
+		start := time.Now()
+		if _, err := c.Write(ctx, writeReq(nid, val)); err != nil {
+			return result{err: err}
+		}
+		if err := waitFor(val); err != nil {
+			return result{err: err}
+		}
+		if i >= 5 {
+			d = append(d, time.Since(start))
+		}
+	}
+	if gap > 0 {
+		// The sleeps make a wall clock mean impossible; use the samples.
+		r := summarize(d)
+		var sum time.Duration
+		for _, x := range d {
+			sum += x
+		}
+		r.mean = sum / time.Duration(len(d))
+		return r
+	}
+	r := measure(5, n(100), func(i int) error {
+		val := int32(200000 + i)
 		if _, err := c.Write(ctx, writeReq(nid, val)); err != nil {
 			return err
 		}
