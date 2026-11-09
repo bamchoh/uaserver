@@ -1,207 +1,209 @@
 # uaserver
 
-[OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard) のサーバー機能を Go に移植したものです。
-外部ライブラリには依存せず、標準ライブラリだけで書いています。
+English | [日本語](README.ja-JP.md)
 
-## できること
+An OPC UA server library for Go, ported from the server side of [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard).
+It has no dependencies beyond the Go standard library.
 
-| 分類 | 内容 |
+## Features
+
+| Area | Support |
 |---|---|
-| トランスポート | opc.tcp (UA-CP: Hello/Ack/Error)、チャンク分割（送受信の両方） |
-| エンコーディング | UA Binary（25 の組み込み型すべて、構造体 345 種は `Opc.Ua.Types.bsd` から自動生成） |
-| セキュリティポリシー | None, Basic256Sha256, Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, ECC_nistP256, ECC_nistP384（それぞれ Sign / SignAndEncrypt） |
-| セキュアチャネル | OPN（非対称暗号＋署名）、MSG（対称暗号＋HMAC）、トークンの Renew、シーケンス番号の検査 |
-| 証明書 | 自己署名証明書の自動生成（RSA と ECC P-256 / P-384）、`pki/{own,trusted,issuer,rejected}` ストア（.NET 版と同じ構成）、CA チェーンの検証 |
-| ユーザー認証 | Anonymous、UserName（パスワードは RSA で暗号化、None エンドポイントでも暗号化）、X509 証明書（ECC エンドポイントでは ECC のユーザー証明書） |
-| アドレス空間 | 公式 `Opc.Ua.NodeSet2.xml`（名前空間 0）を埋め込んで読み込み。独自の NodeSet2 も `LoadNodeSet` で読み込み可能 |
-| サービス | GetEndpoints, FindServers, CreateSession / ActivateSession / CloseSession, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write（IndexRange・型チェック付き）, Call, Subscription 系一式（Create / Modify / SetPublishingMode / Publish / Republish / Transfer / Delete）, MonitoredItem 系一式（データ変化通知、絶対値デッドバンド） |
+| Transport | opc.tcp (UA-CP: Hello/Ack/Error), message chunking in both directions |
+| Encoding | UA Binary (all 25 built-in types; 345 structures generated from `Opc.Ua.Types.bsd`) |
+| Security policies | None, Basic256Sha256, Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, ECC_nistP256, ECC_nistP384 (each with Sign and SignAndEncrypt) |
+| Secure channel | OPN (asymmetric encryption and signing), MSG (symmetric encryption and HMAC), token renewal, sequence number checks |
+| Certificates | Self-signed certificates created automatically (RSA and ECC P-256 / P-384), a `pki/{own,trusted,issuer,rejected}` store with the same layout as the .NET stack, CA chain validation |
+| User authentication | Anonymous, UserName (passwords are RSA encrypted, also on None endpoints), X509 certificates (ECC user certificates on ECC endpoints) |
+| Address space | The official `Opc.Ua.NodeSet2.xml` (namespace 0) is embedded and loaded; custom NodeSet2 files can be loaded with `LoadNodeSet` |
+| Services | GetEndpoints, FindServers, CreateSession / ActivateSession / CloseSession, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write (with IndexRange and type checks), Call, all Subscription services (Create / Modify / SetPublishingMode / Publish / Republish / Transfer / Delete), all MonitoredItem services (data change notifications, absolute deadband) |
 
-## 対応していないもの
+## Not supported
 
-- イベント / アラーム（EventFilter）、履歴（HistoryRead/Update）、Query、NodeManagement（AddNodes など）
-- PercentDeadband、SetTriggering、集計（Aggregate）フィルター
-- ECC エンドポイントでの UserName 認証（パスワードの EccEncryptedSecret 形式が未実装のため、ECC エンドポイントでは提示しない）
-- ECC の AesGcm / ChaChaPoly 版、brainpool、curve25519 / curve448、廃止された Basic128Rsa15 / Basic256
-- HTTPS / WebSocket トランスポート、PubSub、GDS、リバースコネクト
-- CRL（証明書失効リスト）の検査
+- Events and alarms (EventFilter), history (HistoryRead/Update), Query, NodeManagement (AddNodes etc.)
+- PercentDeadband, SetTriggering, aggregate filters
+- UserName authentication on ECC endpoints (the EccEncryptedSecret password format is not implemented, so user name tokens are not offered on ECC endpoints)
+- The AesGcm / ChaChaPoly variants of the ECC policies, brainpool, curve25519 / curve448, and the deprecated Basic128Rsa15 / Basic256
+- HTTPS / WebSocket transports, PubSub, GDS, reverse connect
+- CRL (certificate revocation list) checks
 
-## gopcua との比較
+## Comparison with gopcua
 
-Go の OPC UA ライブラリとしては [gopcua/opcua](https://github.com/gopcua/opcua) が広く使われています。
-gopcua はクライアントが中心で、多くの本番環境で使われています。uaserver はサーバーに絞った実装です。
+[gopcua/opcua](https://github.com/gopcua/opcua) is the most widely used OPC UA library for Go.
+gopcua focuses on the client and is used in many production environments; uaserver focuses on the server.
 
-以下は gopcua の main ブランチ（コミット `79fa869`、2026-11-09 時点）のソースを読んで比較したものです。
-gopcua の README の表ではなく、コードの実装状況を基準にしています（`BadServiceUnsupported` を返すだけのサービスは「×」）。
-gopcua は活発に開発されているので、最新の状況は gopcua 側で確認してください。
+The comparison below is based on reading the source of gopcua's main branch (commit `79fa869`, as of 2026-11-09),
+not on the table in gopcua's README (a service that only returns `BadServiceUnsupported` is marked "No").
+gopcua is actively developed, so check gopcua itself for its current state.
 
-**凡例**：○ 対応　× 非対応　△ 一部対応（備考を参照）
+**Legend**: Yes = supported, No = not supported, Partial = partly supported (see the notes)
 
-### 全体
+### Overview
 
-| 項目 | uaserver | gopcua |
+| | uaserver | gopcua |
 |---|---|---|
-| 主な用途 | サーバー | クライアント（サーバーは開発中） |
-| クライアント | × | ○（本番での利用実績が多い） |
-| 依存ライブラリ | Go 標準ライブラリのみ | google/uuid、golang.org/x/exp、golang.org/x/term など |
-| 成り立ち | UA-.NETStandard の移植 | 独自実装 |
-| 標準アドレス空間（名前空間 0） | ○ 公式 NodeSet2 を埋め込み | ○ 公式 NodeSet2 を埋め込み |
-| 独自 NodeSet2 の読み込み | ○ | ○ |
-| 相互接続の検証 | .NET 公式クライアントとの相互接続テストを CI で実行 | — |
+| Main use | Server | Client (the server is in development) |
+| Client | No | Yes (widely used in production) |
+| Dependencies | Go standard library only | google/uuid, golang.org/x/exp, golang.org/x/term and others |
+| Origin | Port of UA-.NETStandard | Independent implementation |
+| Standard address space (namespace 0) | Yes, official NodeSet2 embedded | Yes, official NodeSet2 embedded |
+| Loading custom NodeSet2 files | Yes | Yes |
+| Interoperability testing | Interop tests against the official .NET client run in CI | — |
 
-### セキュリティ（サーバー）
+### Security (server)
 
-| 項目 | uaserver | gopcua サーバー | gopcua クライアント |
+| | uaserver | gopcua server | gopcua client |
 |---|---|---|---|
-| None | ○ | ○ | ○ |
-| Basic128Rsa15（廃止） | × | △ 未検証 ※1 | ○ |
-| Basic256（廃止） | × | △ 未検証 ※1 | ○ |
-| Basic256Sha256 | ○ | △ 未検証 ※1 | ○ |
-| Aes128_Sha256_RsaOaep | ○ | △ 未検証 ※1 | ○ |
-| Aes256_Sha256_RsaPss | ○ | △ 未検証 ※1 | ○ |
-| ECC_nistP256 / ECC_nistP384 | ○ | × | × |
-| Anonymous 認証 | ○ | ○ | ○ |
-| UserName 認証 | ○ パスワードを検証 | △ ※2 | ○ |
-| X509 ユーザー認証 | ○ 署名と信頼リストを検証 | △ ※2 | ○ |
-| クライアント証明書の信頼リスト（trusted / rejected） | ○ | × | — |
-| 自己署名証明書の自動生成 | ○ | × ライブラリは証明書と鍵を受け取る（生成コードはサンプルにあり） | — |
+| None | Yes | Yes | Yes |
+| Basic128Rsa15 (deprecated) | No | Partial, untested *1 | Yes |
+| Basic256 (deprecated) | No | Partial, untested *1 | Yes |
+| Basic256Sha256 | Yes | Partial, untested *1 | Yes |
+| Aes128_Sha256_RsaOaep | Yes | Partial, untested *1 | Yes |
+| Aes256_Sha256_RsaPss | Yes | Partial, untested *1 | Yes |
+| ECC_nistP256 / ECC_nistP384 | Yes | No | No |
+| Anonymous authentication | Yes | Yes | Yes |
+| UserName authentication | Yes, passwords are checked | Partial *2 | Yes |
+| X509 user authentication | Yes, signature and trust list are checked | Partial *2 | Yes |
+| Client certificate trust list (trusted / rejected) | Yes | No | — |
+| Self-signed certificate creation | Yes | No, the library takes a certificate and key (the examples contain generation code) | — |
 
-※1 gopcua の README で「Untested」とされているもの。
-※2 ポリシーとして提示できますが、ActivateSession でユーザートークン（パスワードや証明書）を検証していません。
+*1 Marked "Untested" in gopcua's README.
+*2 The token types can be offered, but ActivateSession does not check user tokens (passwords or certificates).
 
-### サービス（サーバー）
+### Services (server)
 
-| サービスセット | サービス | uaserver | gopcua サーバー |
+| Service set | Service | uaserver | gopcua server |
 |---|---|---|---|
-| Discovery | FindServers / GetEndpoints | ○ | ○ |
-| | FindServersOnNetwork | △ 空の一覧を返す | × |
-| | RegisterServer / RegisterServer2 | × | × |
-| Session | CreateSession / ActivateSession / CloseSession | ○ | ○ |
-| | Cancel | △ 応答のみ（取り消しはしない） | × |
-| View | Browse / BrowseNext | ○ | ○ |
-| | TranslateBrowsePathsToNodeIds | ○ | × |
-| | RegisterNodes / UnregisterNodes | ○ | ○ |
-| Attribute | Read / Write | ○ | ○ |
-| | HistoryRead / HistoryUpdate | × | × |
-| Method | Call | ○ | × |
-| MonitoredItem | CreateMonitoredItems / DeleteMonitoredItems / SetMonitoringMode | ○ | ○ |
-| | ModifyMonitoredItems | ○ | × |
-| | SetTriggering | × | × |
-| Subscription | CreateSubscription / DeleteSubscriptions / Publish | ○ | ○ |
-| | ModifySubscription / SetPublishingMode | ○ | × |
-| | Republish / TransferSubscriptions | ○ | × |
-| NodeManagement | AddNodes など | × | × |
-| Query | QueryFirst / QueryNext | × | × |
+| Discovery | FindServers / GetEndpoints | Yes | Yes |
+| | FindServersOnNetwork | Partial, returns an empty list | No |
+| | RegisterServer / RegisterServer2 | No | No |
+| Session | CreateSession / ActivateSession / CloseSession | Yes | Yes |
+| | Cancel | Partial, responds but cancels nothing | No |
+| View | Browse / BrowseNext | Yes | Yes |
+| | TranslateBrowsePathsToNodeIds | Yes | No |
+| | RegisterNodes / UnregisterNodes | Yes | Yes |
+| Attribute | Read / Write | Yes | Yes |
+| | HistoryRead / HistoryUpdate | No | No |
+| Method | Call | Yes | No |
+| MonitoredItem | CreateMonitoredItems / DeleteMonitoredItems / SetMonitoringMode | Yes | Yes |
+| | ModifyMonitoredItems | Yes | No |
+| | SetTriggering | No | No |
+| Subscription | CreateSubscription / DeleteSubscriptions / Publish | Yes | Yes |
+| | ModifySubscription / SetPublishingMode | Yes | No |
+| | Republish / TransferSubscriptions | Yes | No |
+| NodeManagement | AddNodes etc. | No | No |
+| Query | QueryFirst / QueryNext | No | No |
 
-### パフォーマンス
+### Performance
 
-同じクライアント（gopcua v0.9.1）から、uaserver と gopcua v0.9.1 のサーバーに同じ操作を投げて測りました。
-両サーバーには、同じ名前空間に同じ 1000 個の Int32 変数を置いています。
-測定コードは [`bench/`](bench) にあり、本体とは別のモジュールなので、uaserver 本体は gopcua に依存しません。
+The same client (gopcua v0.9.1) sent the same operations to uaserver and to the gopcua v0.9.1 server.
+Both servers hold the same 1000 Int32 variables in the same namespace.
+The benchmark code is in [`bench/`](bench); it is a separate module, so uaserver itself does not depend on gopcua.
 
-測定環境：Windows 11 / amd64、Intel Core i7-11800H（16 論理コア）、Go 1.25.6、サーバーとクライアントは同じマシン（localhost）。
-3 回測り、どの項目も数 % 以内に収まったので、そのうち 1 回分を載せています。
+Environment: Windows 11 / amd64, Intel Core i7-11800H (16 logical cores), Go 1.25.6, server and client on the same machine (localhost).
+Each benchmark was run three times; every result stayed within a few percent, and one run is shown.
 
-| 項目 | uaserver | gopcua | 差 |
+| | uaserver | gopcua | Difference |
 |---|---|---|---|
-| 接続の確立と切断（None） | 1.75 ms | 1.91 ms | uaserver が約 10% 速い |
-| 接続の確立と切断（Basic256Sha256 / SignAndEncrypt） | 12.0 ms | 11.7 ms | ほぼ同じ（RSA の処理が大半） |
-| Read 1 ノード（None） | 72 µs（13,954 回/秒） | 106 µs（9,428 回/秒） | uaserver が約 1.5 倍 |
-| Read 1 ノード（Basic256Sha256 / SignAndEncrypt） | 83 µs（12,061 回/秒） | 118 µs（8,469 回/秒） | uaserver が約 1.4 倍 |
-| Read 1000 ノードを 1 回で（None） | 1.99 ms（50 万ノード/秒） | 3.73 ms（27 万ノード/秒） | uaserver が約 1.9 倍 |
-| Read 1 ノード、8 クライアント並列（None） | 34,086 回/秒 | 23,755 回/秒 | uaserver が約 1.4 倍 |
-| Write 1 ノード（None） | 72 µs（13,850 回/秒） | 100 µs（9,996 回/秒） | uaserver が約 1.4 倍 |
-| Browse（1000 参照のフォルダ） | 2.18 ms | 17.6 ms | uaserver が約 8 倍 |
-| Write してからデータ変化通知が届くまで（50 ms おきに書き込み） | 1 ms 未満 ※ | 9.4 ms | uaserver は変化した瞬間に通知 |
-| Write してからデータ変化通知が届くまで（通知を受けたらすぐ次を書き込み） | 10.0 ms | 10.0 ms | 同じ（送信間隔 10 ms の上限） |
-| メモリ：Go ヒープ（起動直後） | 14.4 MB | 22.3 MB | |
-| メモリ：Go ヒープ（20 セッション接続中） | 14.6 MB | 24.2 MB | |
+| Connect and disconnect (None) | 1.75 ms | 1.91 ms | uaserver about 10% faster |
+| Connect and disconnect (Basic256Sha256 / SignAndEncrypt) | 12.0 ms | 11.7 ms | About the same (dominated by RSA) |
+| Read 1 node (None) | 72 µs (13,954/s) | 106 µs (9,428/s) | uaserver about 1.5x |
+| Read 1 node (Basic256Sha256 / SignAndEncrypt) | 83 µs (12,061/s) | 118 µs (8,469/s) | uaserver about 1.4x |
+| Read 1000 nodes in one request (None) | 1.99 ms (500k nodes/s) | 3.73 ms (270k nodes/s) | uaserver about 1.9x |
+| Read 1 node, 8 parallel clients (None) | 34,086/s | 23,755/s | uaserver about 1.4x |
+| Write 1 node (None) | 72 µs (13,850/s) | 100 µs (9,996/s) | uaserver about 1.4x |
+| Browse (folder with 1000 references) | 2.18 ms | 17.6 ms | uaserver about 8x |
+| Write to data change notification (a write every 50 ms) | under 1 ms * | 9.4 ms | uaserver notifies as soon as the value changes |
+| Write to data change notification (next write right after each notification) | 10.0 ms | 10.0 ms | Same (limited by the 10 ms publishing interval) |
+| Memory: Go heap (idle) | 14.4 MB | 22.3 MB | |
+| Memory: Go heap (20 connected sessions) | 14.6 MB | 24.2 MB | |
 
-時間はすべて 1 回あたりの平均で、測定ループ全体の経過時間を回数で割って求めています。
-Windows では Go の時計の分解能が 0.1〜0.5 ms 程度しかなく、1 回ずつ測った値は速い操作では当てにならないためです。
-クライアントの処理時間も含むので、サーバー単体の差はこの表より大きくなります。
+All times are averages per operation, computed from the wall clock time of the whole measurement loop divided by the number of operations.
+On Windows, Go's clock resolution is only about 0.1 to 0.5 ms, so timing single fast operations is not reliable.
+The times include the client's own processing, so the difference between the servers alone is larger than shown.
 
-※ 通知の待ち時間は書き込みの合間に 1 回ずつ測るしかなく、3 回の測定で 14〜39 µs でした。時計の分解能より短いので「1 ms 未満」と表記しています。
+\* The notification latency can only be timed one write at a time; the three runs measured 14 to 39 µs. This is below the clock resolution, so it is shown as "under 1 ms".
 
-**結果を読むときの注意**
+**Notes on the results**
 
-- **データ変化通知**：uaserver は、`SetValue` やクライアントの Write で値が変わると、その場で通知を作り、送信間隔（Publishing Interval）を守れる範囲ですぐ送ります。gopcua は次の送信周期を待って送るので、送信間隔ぶん（ここでは 10 ms）遅れます。値を立て続けに書き込む場合は、どちらもクライアントが要求した送信間隔（10 ms に 1 通）が上限になります。`OnRead` で値を返す変数は変化を検知できないので、uaserver は `Config.MinSamplingInterval`（既定 50 ms）ごとに見回って通知します。
-- **Write の比較は gopcua に有利**：gopcua のサーバーは、書き込む値の型や配列の形を検査しません。uaserver は検査しています。
-- **暗号化ありの比較は Basic256Sha256 / SignAndEncrypt だけ**：gopcua のサーバーでは、ほかの組み合わせが未実装または未検証のためです。
+- **Data change notifications**: when a value changes through `SetValue` or a client Write, uaserver creates the notification right away and sends it as soon as the publishing interval allows. gopcua waits for the next publishing cycle, so it is one publishing interval (10 ms here) late. When values are written back to back, both are limited by the publishing interval the client requested (one message per 10 ms). Variables that return their value from `OnRead` cannot report changes, so uaserver polls them every `Config.MinSamplingInterval` (50 ms by default).
+- **The Write comparison favors gopcua**: the gopcua server does not check the type or array shape of written values; uaserver does.
+- **Only Basic256Sha256 / SignAndEncrypt is compared with security**: the other combinations are not implemented or not tested in the gopcua server.
 
-**エンコード / デコード**
+**Encoding and decoding**
 
-両ライブラリの `ua` パッケージで、同じメッセージを変換する速さを `go test -bench` で比べました。
-まず、両者がまったく同じバイト列を出力することをテストで確認しています。
+The `ua` packages of both libraries were compared with `go test -bench` on the same messages.
+A test first checks that both produce exactly the same bytes.
 
-| 処理（1000 要素） | uaserver | gopcua | 差 |
+| Operation (1000 elements) | uaserver | gopcua | Difference |
 |---|---|---|---|
-| ReadResponse のエンコード | 54 µs、113 KB、15 回の割り当て | 343 µs、257 KB、6,786 回 | 約 6 倍 |
-| ReadResponse のデコード | 62 µs、126 KB、747 回 | 316 µs、229 KB、5,506 回 | 約 5 倍 |
-| ReadRequest のエンコード | 34 µs、113 KB、15 回 | 1,067 µs、628 KB、17,792 回 | 約 31 倍 |
-| ReadRequest のデコード | 48 µs、94 KB、1,003 回 | 990 µs、503 KB、11,764 回 | 約 21 倍 |
+| Encode ReadResponse | 54 µs, 113 KB, 15 allocations | 343 µs, 257 KB, 6,786 allocations | about 6x |
+| Decode ReadResponse | 62 µs, 126 KB, 747 allocations | 316 µs, 229 KB, 5,506 allocations | about 5x |
+| Encode ReadRequest | 34 µs, 113 KB, 15 allocations | 1,067 µs, 628 KB, 17,792 allocations | about 31x |
+| Decode ReadRequest | 48 µs, 94 KB, 1,003 allocations | 990 µs, 503 KB, 11,764 allocations | about 21x |
 
-差の主な理由は作りの違いです。uaserver はスキーマから生成した専用のコードで変換し、gopcua はリフレクションで汎用的に変換しています。
+The main reason is the design: uaserver uses code generated from the schema, while gopcua uses reflection.
 
-**再現方法**
+**Reproducing**
 
 ```sh
 cd bench
-go run ./cmd/runner           # サーバー同士の比較（数分かかります）
-go test -bench . -benchmem    # エンコード / デコードの比較
+go run ./cmd/runner           # server comparison (takes a few minutes)
+go test -bench . -benchmem    # encoding / decoding comparison
 ```
 
-結果はマシンや OS で変わります。数字そのものより、両者の比を目安にしてください。
+Results vary between machines and operating systems; use the ratios rather than the absolute numbers.
 
-### どちらを選ぶか
+### Which one to use
 
-- **OPC UA サーバーに接続して値を読み書きしたい**（クライアント）：gopcua を使ってください。uaserver にはクライアントがありません。
-- **Go で OPC UA サーバーを作りたい**：uaserver のほうが、認証、証明書の信頼管理、メソッド呼び出し、サブスクリプション系のサービスまで揃っています。
-- **廃止されたポリシー（Basic128Rsa15 / Basic256）しか使えない古い機器とつなぎたい**：uaserver は非対応です。
+- **To connect to OPC UA servers and read or write values** (a client): use gopcua. uaserver has no client.
+- **To build an OPC UA server in Go**: uaserver covers more, including authentication, certificate trust management, method calls and the full set of subscription services.
+- **To connect to old devices that only support the deprecated policies (Basic128Rsa15 / Basic256)**: uaserver does not support them.
 
-## 使い方
+## Usage
 
 ```sh
 go run ./cmd/opcuasrv -addr :4840
 ```
 
-主なオプション:
+Main options:
 
-| オプション | 説明 |
+| Option | Description |
 |---|---|
-| `-addr` | 待ち受けアドレス（既定 `:4840`） |
-| `-url` | 公開するエンドポイント URL（既定 `opc.tcp://<ホスト名>:<ポート>`） |
-| `-pki` | 証明書ストアのディレクトリ（既定 `pki`） |
-| `-users` | `user:password` をカンマ区切りで指定（既定 `user1:password1`） |
-| `-autoaccept` | すべてのクライアント証明書を信頼する（テスト用） |
-| `-secure-only` | None ポリシーを提供しない |
+| `-addr` | Listen address (default `:4840`) |
+| `-url` | Advertised endpoint URL (default `opc.tcp://<hostname>:<port>`) |
+| `-pki` | Certificate store directory (default `pki`) |
+| `-users` | Comma separated `user:password` list (default `user1:password1`) |
+| `-autoaccept` | Trust all client certificates (for testing only) |
+| `-secure-only` | Do not offer the None security policy |
 
-セキュアな接続をすると、初回はクライアント証明書が `pki/rejected/certs` に保存されて拒否されます。
-そのファイルを `pki/trusted/certs` に移すと、再起動なしで接続できるようになります。
+On the first secure connection, the client certificate is stored in `pki/rejected/certs` and the connection is rejected.
+Move that file to `pki/trusted/certs` and the client can connect, without restarting the server.
 
-### デモのアドレス空間
+### Demo address space
 
-`Objects/Demo` 以下に、動作確認用の変数があります（名前空間 `urn:opcuasrv:demo`、NodeId は `s=Demo.<フォルダ>.<名前>`）。
-Dynamic と Methods 以外の変数は書き込みもできます。
+`Objects/Demo` contains variables for testing (namespace `urn:opcuasrv:demo`, NodeIds `s=Demo.<folder>.<name>`).
+All variables except those in Dynamic and Methods are writable.
 
-| フォルダ | 内容 |
+| Folder | Contents |
 |---|---|
-| `Static` | 全組み込み型のスカラー（Boolean〜UInt64、Float、Double、String、DateTime、Guid、ByteString、XmlElement、LocalizedText、QualifiedName、NodeId、ExpandedNodeId、StatusCode） |
-| `Arrays` | 全組み込み型の 1 次元配列。`ByteArray` は ByteString ではなく Byte の配列 |
-| `Matrices` | 2 次元配列（Byte 4×4、Int32 3×4、Double 2×3、Boolean 2×2、String 2×3）と 3 次元配列（Byte 2×2×3、Int32 2×3×4、Float 2×2×2） |
-| `Structures` | 構造体（Range、Range の配列、EUInformation、TimeZoneDataType）と列挙型（NodeClass） |
-| `Dynamic` | 0.5 秒ごとに変わる Counter と Sine、読むたびに現在時刻を返す Time |
-| `Methods` | `Add(a, b)` メソッド |
+| `Static` | Scalars of every built-in type (Boolean to UInt64, Float, Double, String, DateTime, Guid, ByteString, XmlElement, LocalizedText, QualifiedName, NodeId, ExpandedNodeId, StatusCode) |
+| `Arrays` | One dimensional arrays of every built-in type. `ByteArray` is an array of Byte, not a ByteString |
+| `Matrices` | Two dimensional arrays (Byte 4x4, Int32 3x4, Double 2x3, Boolean 2x2, String 2x3) and three dimensional arrays (Byte 2x2x3, Int32 2x3x4, Float 2x2x2) |
+| `Structures` | Structures (Range, an array of Range, EUInformation, TimeZoneDataType) and an enumeration (NodeClass) |
+| `Dynamic` | Counter and Sine, which change every 0.5 seconds, and Time, which returns the current time on every read |
+| `Methods` | An `Add(a, b)` method |
 
-多次元配列の要素は行優先（最後の添字が最も速く変わる）で 0 から番号を振っているので、3×4 の行列の `[i][j]` は `i*4+j` です。
-書き込める行列の大きさは ArrayDimensions（宣言時の大きさ）以下です。
+Matrix elements are stored row-major (the last index changes fastest) and numbered from 0, so element `[i][j]` of a 3x4 matrix is `i*4+j`.
+A written matrix may not be larger than the variable's ArrayDimensions.
 
-### ライブラリとして使う
+### Using the library
 
 ```sh
 go get github.com/bamchoh/uaserver/server
 ```
 
-パッケージは `github.com/bamchoh/uaserver/server`（サーバー）、`.../ua`（型とエンコーディング）、`.../uasc`（セキュリティポリシー）です。
+The packages are `github.com/bamchoh/uaserver/server` (the server), `.../ua` (types and encoding) and `.../uasc` (security policies).
 
 ```go
 srv, _ := server.New(server.Config{
@@ -217,33 +219,33 @@ ns := as.RegisterNamespace("urn:example")
 as.AddVariable(server.ObjectsFolder, ua.NewStringNodeId(ns, "Temp"),
     ua.NewQualifiedName(ns, "Temp"), ua.NewVariant(21.5), server.VariableOptions{})
 go srv.ListenAndServe()
-as.SetValue(ua.NewStringNodeId(ns, "Temp"), ua.NewVariant(22.0)) // 購読中のクライアントに通知されます
+as.SetValue(ua.NewStringNodeId(ns, "Temp"), ua.NewVariant(22.0)) // subscribed clients are notified
 ```
 
-`Node.OnRead` / `Node.OnWrite` で値の読み書きを独自処理にでき、`AddMethod` でメソッドを追加できます。
+`Node.OnRead` / `Node.OnWrite` customize how values are read and written, and `AddMethod` adds methods.
 
-## 構成
+## Package layout
 
-| パッケージ | .NET 版で対応する部分 |
+| Package | Counterpart in the .NET stack |
 |---|---|
-| `ua` | Opc.Ua.Core の組み込み型、BinaryEncoder/Decoder、自動生成の型（`types_gen.go`、`id/ids_gen.go`、`status_gen.go`） |
-| `uacp` | TcpMessageSocket / Hello・Ack の処理 |
-| `uasc` | UaSCBinaryChannel（チャネル、チャンク、トークン）と SecurityPolicies |
-| `server` | Opc.Ua.Server（StandardServer、SessionManager、SubscriptionManager、MasterNodeManager、CertificateValidator） |
-| `internal/gen` | スキーマからのコード生成（`go generate ./ua`） |
+| `ua` | Built-in types of Opc.Ua.Core, BinaryEncoder/Decoder, generated types (`types_gen.go`, `id/ids_gen.go`, `status_gen.go`) |
+| `uacp` | TcpMessageSocket / Hello and Acknowledge handling |
+| `uasc` | UaSCBinaryChannel (channel, chunks, tokens) and SecurityPolicies |
+| `server` | Opc.Ua.Server (StandardServer, SessionManager, SubscriptionManager, MasterNodeManager, CertificateValidator) |
+| `internal/gen` | Code generation from the schema files (`go generate ./ua`) |
 
-## テスト
+## Testing
 
 ```sh
 go test ./...
 ```
 
-.NET 公式クライアント（OPCFoundation.NetStandard.Opc.Ua.Client 2.0.1）との相互接続テスト:
+Interoperability tests with the official .NET client (OPCFoundation.NetStandard.Opc.Ua.Client 2.0.1):
 
 ```sh
 go run ./cmd/opcuasrv -addr :48400 -url opc.tcp://localhost:48400 -autoaccept
 cd tests/interop/dotnet && dotnet run -- opc.tcp://localhost:48400
 ```
 
-全ポリシー（ECC を含む）とモードの組み合わせ、匿名・ユーザー名・X509 証明書（RSA と ECC）の認証、Browse / Translate / Read / Write / Call、
-4000 ノードの一括読み出し（マルチチャンク）、Subscription と Publish、トークンの Renew（RSA と ECC）を確認します。
+They cover every security policy (including ECC) and mode, anonymous, user name and X509 (RSA and ECC) authentication,
+Browse / Translate / Read / Write / Call, reading 4000 nodes at once (multiple chunks), Subscription and Publish, and token renewal (RSA and ECC).
