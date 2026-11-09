@@ -41,6 +41,11 @@ func main() {
 		server.EnableSecurity("None", ua.MessageSecurityModeNone),
 		server.EnableSecurity("Basic256Sha256", ua.MessageSecurityModeSignAndEncrypt),
 		server.EnableAuthMode(ua.UserTokenTypeAnonymous),
+		// gopcua listens on the host of the first endpoint. A wildcard host makes
+		// it listen on both IPv4 and IPv6, like the uaserver side; with only
+		// "localhost" it listens on ::1 alone and IPv4 clients (e.g. UaExpert)
+		// are refused, which Windows retries for about 2 s per connection.
+		server.EndPoint("[::]", *port),
 		server.EndPoint("localhost", *port),
 		server.PrivateKey(key),
 		server.Certificate(cert),

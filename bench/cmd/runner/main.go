@@ -146,6 +146,7 @@ func main() {
 		{"browse", "Browse 1000 参照のフォルダ（None）", scBrowse},
 		{"sub", "Write から データ変化通知まで、連続で書き込み（None）", scSubscription(0)},
 		{"sub-sparse", "Write から データ変化通知まで、50 ms おきに書き込み（None）", scSubscription(50 * time.Millisecond)},
+		{"startup", "接続直後の型階層とツリーの読み込み、1 ノードずつ Browse（None）", scStartup},
 	}
 
 	type serverResult struct {
@@ -752,5 +753,86 @@ func subscriptionLatency(ctx context.Context, e *env, gap time.Duration) result 
 		return waitFor(val)
 	})
 	r.perSec = 0
+	return r
+}
+
+// scStartup imitates what a GUI client such as UaExpert does right after
+// connecting: it loads the reference type and data type hierarchies and the
+// top of the address space tree, browsing one node per request.
+func scStartup(ctx context.Context, e *env) result {
+	calls, nodes := 0, 0
+	r := measure(1, n(5), func(int) error {
+		c, err := e.connect(ctx, false)
+		if err != nil {
+			return err
+		}
+		defer c.Close(ctx)
+		calls, nodes = 0, 0
+		visited := map[string]bool{}
+		browse := func(nid *ua.NodeID, refType uint32) ([]*ua.ReferenceDescription, error) {
+			calls++
+			resp, err := c.Browse(ctx, &ua.BrowseRequest{
+				View: &ua.ViewDescription{ViewID: ua.NewTwoByteNodeID(0)},
+				NodesToBrowse: []*ua.BrowseDescription{{
+					NodeID: nid, BrowseDirection: ua.BrowseDirectionForward,
+					ReferenceTypeID: ua.NewNumericNodeID(0, refType), IncludeSubtypes: true,
+					ResultMask: uint32(ua.BrowseResultMaskAll),
+				}},
+			})
+			if err != nil {
+				return nil, err
+			}
+			if len(resp.Results) != 1 {
+				return nil, errors.New("browse failed")
+			}
+			res := resp.Results[0]
+			refs := res.References
+			for len(res.ContinuationPoint) > 0 {
+				calls++
+				next, err := c.BrowseNext(ctx, &ua.BrowseNextRequest{ContinuationPoints: [][]byte{res.ContinuationPoint}})
+				if err != nil {
+					return nil, err
+				}
+				if len(next.Results) != 1 {
+					return nil, errors.New("browse next failed")
+				}
+				res = next.Results[0]
+				refs = append(refs, res.References...)
+			}
+			return refs, nil
+		}
+		var walk func(nid *ua.NodeID, refType uint32, depth int) error
+		walk = func(nid *ua.NodeID, refType uint32, depth int) error {
+			if visited[nid.String()] {
+				return nil
+			}
+			visited[nid.String()] = true
+			nodes++
+			refs, err := browse(nid, refType)
+			if err != nil {
+				return err
+			}
+			if depth == 0 {
+				return nil
+			}
+			for _, ref := range refs {
+				if ref.NodeID != nil && ref.NodeID.NodeID != nil {
+					if err := walk(ref.NodeID.NodeID, refType, depth-1); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+		if err := walk(ua.NewNumericNodeID(0, id.References), id.HasSubtype, 20); err != nil {
+			return err
+		}
+		if err := walk(ua.NewNumericNodeID(0, id.BaseDataType), id.HasSubtype, 20); err != nil {
+			return err
+		}
+		return walk(ua.NewNumericNodeID(0, id.RootFolder), id.HierarchicalReferences, 2)
+	})
+	r.perSec = 0
+	r.note = fmt.Sprintf("%d ノード、Browse %d 回", nodes, calls)
 	return r
 }
