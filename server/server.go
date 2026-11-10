@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +43,8 @@ type Identity struct {
 	Type        UserTokenType
 	UserName    string
 	Certificate *x509.Certificate
+
+	eccKeyUsed bool // the password was encrypted for the session's ephemeral key
 }
 
 // Config configures a Server.
@@ -376,13 +377,9 @@ func (s *Server) userTokenPolicy(t UserTokenType, channelPolicy *uasc.SecurityPo
 	tokenPolicy := ""
 	suffix := ""
 	if channelPolicy.IsECC() {
-		// Passwords on ECC endpoints need the EccEncryptedSecret format, which
-		// is not implemented: user name tokens are not offered there.
-		if t == UserTokenUserName {
-			return ua.UserTokenPolicy{}, false
-		}
-		// X509 tokens use the channel's ECC policy (clients only pick token
-		// policies of the same key family), so the user certificate must be ECC.
+		// User tokens use the channel's ECC policy (clients only pick token
+		// policies of the same key family): passwords are sent as an
+		// EccEncryptedSecret and user certificates must be ECC.
 	} else if channelPolicy.IsNone() {
 		tokenPolicy = strongest
 		suffix = "_" + uasc.PolicyByURI(strongest).Name
@@ -491,16 +488,10 @@ func (s *Server) serveConn(c net.Conn) {
 }
 
 func requestHeaderOf(s ua.Structure) *ua.RequestHeader {
-	v := reflect.ValueOf(s)
-	if v.Kind() != reflect.Pointer {
-		return nil
+	if r, ok := s.(ua.Request); ok {
+		return r.Header()
 	}
-	f := v.Elem().FieldByName("RequestHeader")
-	if !f.IsValid() {
-		return nil
-	}
-	h, _ := f.Addr().Interface().(*ua.RequestHeader)
-	return h
+	return nil
 }
 
 func respHeader(req *ua.RequestHeader, status ua.StatusCode) ua.ResponseHeader {

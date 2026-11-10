@@ -3,6 +3,7 @@
 [English](README.md) | 日本語
 
 [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard) のサーバー機能を Go に移植したものです。
+エンコーディングとセキュリティのコードを共有するクライアントも入っています。
 外部ライブラリには依存せず、標準ライブラリだけで書いています。
 
 ## できること
@@ -14,15 +15,15 @@
 | セキュリティポリシー | None, Basic256Sha256, Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, ECC_nistP256, ECC_nistP384（それぞれ Sign / SignAndEncrypt） |
 | セキュアチャネル | OPN（非対称暗号＋署名）、MSG（対称暗号＋HMAC）、トークンの Renew、シーケンス番号の検査 |
 | 証明書 | 自己署名証明書の自動生成（RSA と ECC P-256 / P-384）、`pki/{own,trusted,issuer,rejected}` ストア（.NET 版と同じ構成）、CA チェーンの検証 |
-| ユーザー認証 | Anonymous、UserName（パスワードは RSA で暗号化、None エンドポイントでも暗号化）、X509 証明書（ECC エンドポイントでは ECC のユーザー証明書） |
+| ユーザー認証 | Anonymous、UserName（パスワードは RSA で暗号化、None エンドポイントでも暗号化。ECC エンドポイントでは EccEncryptedSecret 形式）、X509 証明書（ECC エンドポイントでは ECC のユーザー証明書） |
 | アドレス空間 | 公式 `Opc.Ua.NodeSet2.xml`（名前空間 0）を埋め込んで読み込み。独自の NodeSet2 も `LoadNodeSet` で読み込み可能 |
+| クライアント | サーバーと同じセキュリティポリシー・モード・ユーザー認証。GetEndpoints, FindServers, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write, Call、MonitoredItem 付きのサブスクリプション。トークンの Renew、セッションのキープアライブ、自動再接続。その他のサービスは `Client.Send` で送信可能 |
 | サービス | GetEndpoints, FindServers, CreateSession / ActivateSession / CloseSession, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write（IndexRange・型チェック付き）, Call, Subscription 系一式（Create / Modify / SetPublishingMode / Publish / Republish / Transfer / Delete）, MonitoredItem 系一式（データ変化通知、絶対値デッドバンド） |
 
 ## 対応していないもの
 
 - イベント / アラーム（EventFilter）、履歴（HistoryRead/Update）、Query、NodeManagement（AddNodes など）
 - PercentDeadband、SetTriggering、集計（Aggregate）フィルター
-- ECC エンドポイントでの UserName 認証（パスワードの EccEncryptedSecret 形式が未実装のため、ECC エンドポイントでは提示しない）
 - ECC の AesGcm / ChaChaPoly 版、brainpool、curve25519 / curve448、廃止された Basic128Rsa15 / Basic256
 - HTTPS / WebSocket トランスポート、PubSub、GDS、リバースコネクト
 - CRL（証明書失効リスト）の検査
@@ -30,7 +31,7 @@
 ## gopcua との比較
 
 Go の OPC UA ライブラリとしては [gopcua/opcua](https://github.com/gopcua/opcua) が広く使われています。
-gopcua はクライアントが中心で、多くの本番環境で使われています。uaserver はサーバーに絞った実装です。
+gopcua はクライアントが中心で、多くの本番環境で使われています。uaserver はサーバーが中心で、クライアントは新しく追加したものです。
 
 以下は gopcua の main ブランチ（コミット `79fa869`、2026-11-09 時点）のソースを読んで比較したものです。
 gopcua の README の表ではなく、コードの実装状況を基準にしています（`BadServiceUnsupported` を返すだけのサービスは「×」）。
@@ -43,32 +44,33 @@ gopcua は活発に開発されているので、最新の状況は gopcua 側�
 | 項目 | uaserver | gopcua |
 |---|---|---|
 | 主な用途 | サーバー | クライアント（サーバーは開発中） |
-| クライアント | × | ○（本番での利用実績が多い） |
+| クライアント | ○（新規。[クライアント](#クライアント) を参照） | ○（本番での利用実績が多い） |
 | 依存ライブラリ | Go 標準ライブラリのみ | google/uuid、golang.org/x/exp、golang.org/x/term など |
 | 成り立ち | UA-.NETStandard の移植 | 独自実装 |
 | 標準アドレス空間（名前空間 0） | ○ 公式 NodeSet2 を埋め込み | ○ 公式 NodeSet2 を埋め込み |
 | 独自 NodeSet2 の読み込み | ○ | ○ |
-| 相互接続の検証 | .NET 公式クライアントとの相互接続テストを CI で実行 | — |
+| 相互接続の検証 | サーバー：.NET 公式クライアントとの相互接続テストを CI で実行。クライアント：.NET 公式サーバーとの相互接続テストを CI で実行。gopcua サーバーとも手動で確認 | — |
 
-### セキュリティ（サーバー）
+### セキュリティ
 
-| 項目 | uaserver | gopcua サーバー | gopcua クライアント |
-|---|---|---|---|
-| None | ○ | ○ | ○ |
-| Basic128Rsa15（廃止） | × | △ 未検証 ※1 | ○ |
-| Basic256（廃止） | × | △ 未検証 ※1 | ○ |
-| Basic256Sha256 | ○ | △ 未検証 ※1 | ○ |
-| Aes128_Sha256_RsaOaep | ○ | △ 未検証 ※1 | ○ |
-| Aes256_Sha256_RsaPss | ○ | △ 未検証 ※1 | ○ |
-| ECC_nistP256 / ECC_nistP384 | ○ | × | × |
-| Anonymous 認証 | ○ | ○ | ○ |
-| UserName 認証 | ○ パスワードを検証 | △ ※2 | ○ |
-| X509 ユーザー認証 | ○ 署名と信頼リストを検証 | △ ※2 | ○ |
-| クライアント証明書の信頼リスト（trusted / rejected） | ○ | × | — |
-| 自己署名証明書の自動生成 | ○ | × ライブラリは証明書と鍵を受け取る（生成コードはサンプルにあり） | — |
+| 項目 | uaserver サーバー | gopcua サーバー | uaserver クライアント | gopcua クライアント |
+|---|---|---|---|---|
+| None | ○ | ○ | ○ | ○ |
+| Basic128Rsa15（廃止） | × | △ 未検証 ※1 | × | ○ |
+| Basic256（廃止） | × | △ 未検証 ※1 | × | ○ |
+| Basic256Sha256 | ○ | △ 未検証 ※1 | ○ | ○ |
+| Aes128_Sha256_RsaOaep | ○ | △ 未検証 ※1 | ○ | ○ |
+| Aes256_Sha256_RsaPss | ○ | △ 未検証 ※1 | ○ | ○ |
+| ECC_nistP256 / ECC_nistP384 | ○ | × | ○ | × |
+| Anonymous 認証 | ○ | ○ | ○ | ○ |
+| UserName 認証 | ○ パスワードを検証 | △ ※2 | ○ | ○ |
+| X509 ユーザー認証 | ○ 署名と信頼リストを検証 | △ ※2 | ○ | ○ |
+| 相手の証明書の信頼リスト（trusted / rejected） | ○ | × | ○ | × ※3 |
+| 自己署名証明書の自動生成 | ○ | × ライブラリは証明書と鍵を受け取る（生成コードはサンプルにあり） | ○ | × |
 
 ※1 gopcua の README で「Untested」とされているもの。
 ※2 ポリシーとして提示できますが、ActivateSession でユーザートークン（パスワードや証明書）を検証していません。
+※3 アプリケーションが渡した証明書プールでサーバー証明書を検証できます。
 
 ### サービス（サーバー）
 
@@ -144,11 +146,37 @@ Windows では Go の時計の分解能が 0.1〜0.5 ms 程度しかなく、1 �
 
 差の主な理由は作りの違いです。uaserver はスキーマから生成した専用のコードで変換し、gopcua はリフレクションで汎用的に変換しています。
 
+### クライアントの性能
+
+uaserver のクライアントと gopcua v0.9.1 のクライアントで、同じサーバー（別プロセスで動かした uaserver のベンチマーク用サーバー）に同じ操作をして測りました。
+コードは [`bench/cmd/clients`](bench/cmd/clients) にあります。測定環境は上と同じで、3 回ずつ測ったうちの 1 回を載せています。
+
+| 項目 | uaserver クライアント | gopcua クライアント | 差 |
+|---|---|---|---|
+| 接続と切断（None） | 1.53 ms | 1.78 ms | uaserver が約 1.2 倍 ※ |
+| 接続と切断（Basic256Sha256 / SignAndEncrypt） | 10.9 ms | 11.4 ms | ほぼ同じ（RSA の処理が大半） |
+| Read 1 ノード（None） | 49 µs、割り当て 15 回 / 2.2 KB | 73 µs、割り当て 131 回 / 68 KB | uaserver が約 1.5 倍 |
+| Read 1 ノード（Basic256Sha256 / SignAndEncrypt） | 54 µs、割り当て 32 回 / 5.6 KB | 80 µs、割り当て 151 回 / 72 KB | uaserver が約 1.5 倍 |
+| Read 1000 ノードを 1 回で（None） | 497 µs（200 万ノード/秒）、割り当て 782 回 / 581 KB | 1.92 ms（52 万ノード/秒）、割り当て 26,370 回 / 1.1 MB | uaserver が約 3.9 倍 |
+| Read 1000 ノードを 1 回で（Basic256Sha256 / SignAndEncrypt） | 630 µs | 2.06 ms | uaserver が約 3.3 倍 |
+| Read 1 ノード、1 クライアントから 8 並列（None） | 73,705 回/秒 | 23,417 回/秒 | uaserver が約 3.1 倍 |
+| Write 1 ノード（None） | 46 µs、割り当て 17 回 / 2.1 KB | 73 µs、割り当て 121 回 / 68 KB | uaserver が約 1.6 倍 |
+| Browse（1000 参照のフォルダ） | 525 µs | 2.19 ms | uaserver が約 4.2 倍 |
+| Write からデータ変化通知まで | 10.0 ms | 10.0 ms | 同じ（10 ms の送信間隔が上限） |
+| 20 セッション接続中のクライアントのヒープ増分 | 1.2 MB | 5.5 MB | |
+
+割り当ては、クライアントのプロセスでの 1 操作あたりの値です。
+サーバーを gopcua に替えた場合は、1 ノードの Read / Write で約 1.3 倍、1000 ノードで約 1.7 倍でした。その場合は時間の大半がサーバー側になります。
+
+※ 3 回のうち 1 回だけ uaserver クライアントが 4.6 ms になりました。ほかの 2 回は 1.53 ms と 1.54 ms です。
+uaserver クライアントは None ポリシーでは GetEndpoints を省き、CreateSession の応答からエンドポイントを取ります。
+
 **再現方法**
 
 ```sh
 cd bench
 go run ./cmd/runner           # サーバー同士の比較（数分かかります）
+go run ./cmd/clients          # クライアント同士の比較（-server gopcua で gopcua のサーバーを使用）
 go test -bench . -benchmem    # エンコード / デコードの比較
 ```
 
@@ -156,7 +184,9 @@ go test -bench . -benchmem    # エンコード / デコードの比較
 
 ### どちらを選ぶか
 
-- **OPC UA サーバーに接続して値を読み書きしたい**（クライアント）：gopcua を使ってください。uaserver にはクライアントがありません。
+- **OPC UA サーバーに接続して値を読み書きしたい**（クライアント）：実績があり、廃止されたポリシーにも対応している gopcua が無難です。
+  uaserver のクライアントは新しいものですが、ECC ポリシー、サーバー証明書の信頼リスト、順序どおりの通知配信に対応しており、
+  速度と割り当て量でも上回っています（[クライアントの性能](#クライアントの性能) を参照）。
 - **Go で OPC UA サーバーを作りたい**：uaserver のほうが、認証、証明書の信頼管理、メソッド呼び出し、サブスクリプション系のサービスまで揃っています。
 - **廃止されたポリシー（Basic128Rsa15 / Basic256）しか使えない古い機器とつなぎたい**：uaserver は非対応です。
 
@@ -224,14 +254,71 @@ as.SetValue(ua.NewStringNodeId(ns, "Temp"), ua.NewVariant(22.0)) // 購読中の
 
 `Node.OnRead` / `Node.OnWrite` で値の読み書きを独自処理にでき、`AddMethod` でメソッドを追加できます。
 
+## クライアント
+
+`cmd/opcuacli` は小さなコマンドラインクライアントです。
+
+```sh
+go run ./cmd/opcuacli endpoints opc.tcp://localhost:4840
+go run ./cmd/opcuacli browse    opc.tcp://localhost:4840 "ns=2;s=Demo"
+go run ./cmd/opcuacli -policy Basic256Sha256 -user user1 -password password1 \
+    read opc.tcp://localhost:4840 "ns=2;s=Demo.Static.Int32"
+go run ./cmd/opcuacli write     opc.tcp://localhost:4840 "ns=2;s=Demo.Static.Int32" 42
+go run ./cmd/opcuacli subscribe opc.tcp://localhost:4840 "ns=2;s=Demo.Dynamic.Counter"
+```
+
+`-policy best` で最も安全なエンドポイントを選び、`-mode Sign` で署名のみにします（既定は SignAndEncrypt）。
+セキュアなポリシーでは、初回はサーバー証明書が `pki-client/rejected/certs` に保存されて接続に失敗します。
+`pki-client/trusted/certs` に移すとサーバーを信頼します（テスト用には `-autoaccept`）。
+クライアント証明書は `pki-client/own` に作られるので、サーバー側でも同じように信頼してください。
+
+### クライアントライブラリの使い方
+
+```go
+c, err := client.Dial(ctx, "opc.tcp://localhost:4840", client.Config{
+    SecurityPolicy: uasc.SecurityPolicyBasic256Sha256, // 既定は None
+    PKIDir:         "pki-client",                      // 自分の証明書と信頼するサーバー
+    Identity:       client.UserName("user1", "password1"),
+})
+if err != nil { ... }
+defer c.Close(ctx)
+
+id := ua.NewStringNodeId(2, "Demo.Static.Int32")
+dv, err := c.ReadValue(ctx, id)
+err = c.WriteValue(ctx, id, ua.NewVariant(int32(42)))
+refs, err := c.BrowseChildren(ctx, ua.NewNumericNodeId(0, uaid.ObjectsFolder))
+out, err := c.CallMethod(ctx, objectID, methodID, ua.NewVariant(1.0), ua.NewVariant(2.0))
+
+sub, err := c.CreateSubscription(ctx, client.SubscriptionParams{PublishingInterval: 100 * time.Millisecond})
+items, err := sub.MonitorValues(ctx, id)
+for n := range sub.Notifications() { // シーケンス番号順に届く
+    for _, dc := range n.DataChanges {
+        fmt.Println(dc.ClientHandle, dc.Value.Value)
+    }
+}
+```
+
+- エラーは OPC UA のステータスコードを包んでいます。サービスの結果と、`ReadValue`・`WriteValue`・`CallMethod` の個々の操作の結果は `errors.Is(err, ua.StatusBadNodeIdUnknown)` で判定できます。
+- `Read`・`Write`・`Browse`・`Call` などサービス名のメソッドはリクエストをそのまま受け取ります。`Client.Send` で任意のリクエストを送れます。
+- `client.X509(cert, key)` でユーザー証明書でログインします。エンドポイントを明示的に選ぶには `GetEndpoints`・`SelectEndpoint`・`DialEndpoint` を使います。
+- `PKIDir` を指定しないとクライアント証明書はメモリ上に作られ、サーバー証明書は `VerifyServerCertificate` か `AutoAcceptUntrustedCertificates` で受け入れる必要があります。
+- アイドル中もセッションを維持し、セキュリティトークンは期限前に更新します。
+- `AutoReconnect` を指定すると、接続が切れたときに間隔を延ばしながら再接続します。新しいセキュアチャネルでセッションを Activate し、切れたチャネルで送られた通知は Republish で取り直します。
+  サーバーがセッションを破棄していた場合は新しいセッションを作り、サブスクリプションを移すか、同じ監視項目とクライアントハンドルで作り直します。
+  再接続中に出したリクエストは、接続が戻るかコンテキストが終わるまで待ちます。切れたときに送信中だったリクエストは失敗し、再送はしません。
+  状態の変化（`StateConnected`、`StateReconnecting`、`StateClosed`）は `OnStateChange` で受け取れます。
+- `AutoReconnect` を指定しない場合は、接続が切れると `Done()` が閉じられ、各サブスクリプションのチャネルには `Err` 付きの通知が届いてから閉じられます。
+
 ## 構成
 
 | パッケージ | .NET 版で対応する部分 |
 |---|---|
 | `ua` | Opc.Ua.Core の組み込み型、BinaryEncoder/Decoder、自動生成の型（`types_gen.go`、`id/ids_gen.go`、`status_gen.go`） |
-| `uacp` | TcpMessageSocket / Hello・Ack の処理 |
-| `uasc` | UaSCBinaryChannel（チャネル、チャンク、トークン）と SecurityPolicies |
-| `server` | Opc.Ua.Server（StandardServer、SessionManager、SubscriptionManager、MasterNodeManager、CertificateValidator） |
+| `uacp` | TcpMessageSocket / Hello・Ack の処理（サーバー側とクライアント側） |
+| `uasc` | UaSCBinaryChannel（チャネル、チャンク、トークン）と SecurityPolicies（サーバー側とクライアント側） |
+| `uacert` | CertificateValidator、CertificateFactory、ディレクトリ形式の証明書ストア |
+| `server` | Opc.Ua.Server（StandardServer、SessionManager、SubscriptionManager、MasterNodeManager） |
+| `client` | Opc.Ua.Client（Session、Subscription）。移植ではなく Go 向けに書いたもの |
 | `internal/gen` | スキーマからのコード生成（`go generate ./ua`） |
 
 ## テスト
@@ -239,6 +326,9 @@ as.SetValue(ua.NewStringNodeId(ns, "Temp"), ua.NewVariant(22.0)) // 購読中の
 ```sh
 go test ./...
 ```
+
+クライアントのテストでは、TCP でクライアントをサーバーにつなぎ、すべてのエンドポイント（各ポリシーとモード）で匿名・ユーザー名・X509 の認証を確認します。
+継続ポイント付きの Browse、マルチチャンクのメッセージ、サブスクリプション、トークンの Renew、セッションのキープアライブ、証明書の信頼も確認します。
 
 .NET 公式クライアント（OPCFoundation.NetStandard.Opc.Ua.Client 2.0.1）との相互接続テスト:
 
@@ -249,3 +339,13 @@ cd tests/interop/dotnet && dotnet run -- opc.tcp://localhost:48400
 
 全ポリシー（ECC を含む）とモードの組み合わせ、匿名・ユーザー名・X509 証明書（RSA と ECC）の認証、Browse / Translate / Read / Write / Call、
 4000 ノードの一括読み出し（マルチチャンク）、Subscription と Publish、トークンの Renew（RSA と ECC）を確認します。
+
+.NET 公式スタック（OPCFoundation.NetStandard.Opc.Ua.Server 2.0.1）で作ったサーバーとクライアントの相互接続テスト:
+
+```sh
+cd tests/interop/dotnet-server && dotnet run -- 48600      # 待ち受けを始めると READY と表示
+go run ./tests/interop/goclient opc.tcp://localhost:48600   # リポジトリのルートで実行
+```
+
+すべてのエンドポイント（各ポリシーとモード、ECC を含む）に、匿名・ユーザー名（パスワード誤りを含む）・X509（RSA と ECC）でつなぎ、
+それぞれで Read・Browse・Write とデータ変化通知を確認します。どちらの相互接続テストも CI で実行します。

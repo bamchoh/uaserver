@@ -124,3 +124,53 @@ jobs:
           name: server-log
           path: ${{ runner.temp }}/server.log
           if-no-files-found: ignore
+
+  interop-client:
+    name: Interop with .NET server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build .NET interop server
+        working-directory: tests/interop/dotnet-server
+        run: dotnet build -c Release
+
+      - name: Build Go interop client (with race detector)
+        run: go build -race -o "$RUNNER_TEMP/goclient" ./tests/interop/goclient
+
+      - name: Start server
+        working-directory: tests/interop/dotnet-server
+        run: |
+          dotnet run -c Release --no-build -- 48600 > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if grep -q READY "$RUNNER_TEMP/server.log"; then
+              echo "server is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not start"
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+
+      - name: Run interop tests
+        env:
+          GORACE: halt_on_error=1
+        run: '"$RUNNER_TEMP/goclient" opc.tcp://localhost:48600'
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-server-log
+          path: ${{ runner.temp }}/server.log
+          if-no-files-found: ignore

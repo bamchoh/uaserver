@@ -201,6 +201,18 @@ type Structure interface {
 	Decode(d *Decoder)
 }
 
+// Request is implemented by every service request.
+type Request interface {
+	Structure
+	Header() *RequestHeader
+}
+
+// Response is implemented by every service response (including ServiceFault).
+type Response interface {
+	Structure
+	Header() *ResponseHeader
+}
+
 var structFactories = map[NodeId]func() Structure{}
 var structByDataType = map[NodeId]func() Structure{}
 

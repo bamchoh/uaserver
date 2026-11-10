@@ -111,6 +111,10 @@ var cases = new (string Policy, MessageSecurityMode Mode, IUserIdentity User, bo
     (A256, MessageSecurityMode.Sign, User("user1", "password1"), true),
     (A256, MessageSecurityMode.SignAndEncrypt, anon, true),
     (B256, MessageSecurityMode.SignAndEncrypt, User("user1", "wrong"), false),
+    (E256, MessageSecurityMode.Sign, User("user1", "password1"), true),
+    (E256, MessageSecurityMode.SignAndEncrypt, User("user1", "password1"), true),
+    (E384, MessageSecurityMode.SignAndEncrypt, User("user1", "password1"), true),
+    (E384, MessageSecurityMode.Sign, User("user1", "wrong"), false),
 };
 
 int failures = 0;
