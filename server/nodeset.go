@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 //go:embed ns0/Opc.Ua.NodeSet2.xml.gz

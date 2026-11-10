@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // Store manages the application instance certificate and the

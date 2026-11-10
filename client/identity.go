@@ -7,8 +7,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 // Identity is the user identity of a session: Anonymous(), UserName(...) or

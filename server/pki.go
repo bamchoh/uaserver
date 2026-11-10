@@ -6,7 +6,7 @@ import (
 	"crypto/x509"
 	"time"
 
-	"github.com/bamchoh/uaserver/uacert"
+	"github.com/bamchoh/uastack/uacert"
 )
 
 // CertificateStore is the certificate store used by the server. It is an

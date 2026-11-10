@@ -1,5 +1,5 @@
 // Codec micro benchmarks: the same messages encoded and decoded with the
-// uaserver and gopcua UA Binary codecs.
+// uastack and gopcua UA Binary codecs.
 //
 //	cd bench && go test -bench . -benchmem
 package bench
@@ -11,7 +11,7 @@ import (
 
 	gua "github.com/gopcua/opcua/ua"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 const nValues = 1000
@@ -102,7 +102,7 @@ func TestSameEncoding(t *testing.T) {
 }
 
 func BenchmarkEncodeReadResponse(b *testing.B) {
-	b.Run("uaserver", func(b *testing.B) {
+	b.Run("uastack", func(b *testing.B) {
 		m := uaReadResponse()
 		b.ReportAllocs()
 		for b.Loop() {
@@ -122,7 +122,7 @@ func BenchmarkEncodeReadResponse(b *testing.B) {
 
 func BenchmarkDecodeReadResponse(b *testing.B) {
 	data := ua.Encode(uaReadResponse())
-	b.Run("uaserver", func(b *testing.B) {
+	b.Run("uastack", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			var m ua.ReadResponse
@@ -143,7 +143,7 @@ func BenchmarkDecodeReadResponse(b *testing.B) {
 }
 
 func BenchmarkEncodeReadRequest(b *testing.B) {
-	b.Run("uaserver", func(b *testing.B) {
+	b.Run("uastack", func(b *testing.B) {
 		m := uaReadRequest()
 		b.ReportAllocs()
 		for b.Loop() {
@@ -163,7 +163,7 @@ func BenchmarkEncodeReadRequest(b *testing.B) {
 
 func BenchmarkDecodeReadRequest(b *testing.B) {
 	data := ua.Encode(uaReadRequest())
-	b.Run("uaserver", func(b *testing.B) {
+	b.Run("uastack", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			var m ua.ReadRequest

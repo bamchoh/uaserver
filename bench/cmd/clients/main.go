@@ -1,5 +1,5 @@
-// Command clients benchmarks the uaserver client against the gopcua client.
-// Both talk to the same server (the uaserver benchmark server, started as a
+// Command clients benchmarks the uastack client against the gopcua client.
+// Both talk to the same server (the uastack benchmark server, started as a
 // separate process) and run the same operations; the results are printed as
 // a Markdown table.
 //
@@ -28,12 +28,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamchoh/uaserver/bench/internal/memstat"
+	"github.com/bamchoh/uastack/bench/internal/memstat"
 )
 
 var (
 	scale  = flag.Float64("scale", 1, "multiplier for the number of iterations")
-	server = flag.String("server", "uaserver", "server to run against: uaserver or gopcua")
+	server = flag.String("server", "uastack", "server to run against: uastack or gopcua")
 	cpu    = flag.String("cpu", "", "CPU description to print in the environment section")
 	output = flag.String("o", "", "also write the Markdown report to this file")
 )
@@ -56,7 +56,7 @@ type clientDef struct {
 }
 
 var clients = []clientDef{
-	{"uaserver", "this repository", dialUAServer},
+	{"uastack", "this repository", dialUAStack},
 	{"gopcua", "v0.9.1", dialGopcua},
 }
 
@@ -124,7 +124,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pkg, port := "./cmd/srv-uaserver", 48511
+	pkg, port := "./cmd/srv-uastack", 48511
 	if *server == "gopcua" {
 		pkg, port = "./cmd/srv-gopcua", 48512
 	}
@@ -188,7 +188,7 @@ func main() {
 		for _, cd := range clients {
 			b.WriteString(" " + formatResult(results[cd.name][sc.key]) + " |")
 		}
-		b.WriteString(" " + ratio(results["uaserver"][sc.key], results["gopcua"][sc.key]) + " |\n")
+		b.WriteString(" " + ratio(results["uastack"][sc.key], results["gopcua"][sc.key]) + " |\n")
 	}
 	fmt.Fprintf(&b, "| クライアントのヒープ増分（20 セッション接続中） |")
 	for _, cd := range clients {
@@ -228,7 +228,7 @@ func formatResult(r result) string {
 	return s
 }
 
-// ratio describes how the uaserver client compares with the gopcua client.
+// ratio describes how the uastack client compares with the gopcua client.
 func ratio(a, b result) string {
 	if a.err != nil || b.err != nil || a.mean == 0 || b.mean == 0 {
 		return "—"
@@ -236,7 +236,7 @@ func ratio(a, b result) string {
 	f := float64(b.mean) / float64(a.mean)
 	switch {
 	case f >= 1.1:
-		return fmt.Sprintf("uaserver が約 %.1f 倍速い", f)
+		return fmt.Sprintf("uastack が約 %.1f 倍速い", f)
 	case f <= 1/1.1:
 		return fmt.Sprintf("gopcua が約 %.1f 倍速い", 1/f)
 	}
@@ -441,12 +441,12 @@ func connectedMemory(e *env, cd clientDef, count int) float64 {
 func (e *env) resolveNamespace() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	c, err := dialUAServer(ctx, e, false)
+	c, err := dialUAStack(ctx, e, false)
 	if err != nil {
 		return err
 	}
 	defer c.close(ctx)
-	ns, err := c.(*uaserverClient).c.NamespaceIndex(ctx, memstat.NamespaceURI)
+	ns, err := c.(*uastackClient).c.NamespaceIndex(ctx, memstat.NamespaceURI)
 	if err != nil {
 		return err
 	}

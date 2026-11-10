@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uacert"
-	"github.com/bamchoh/uaserver/uacp"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uacert"
+	"github.com/bamchoh/uastack/uacp"
 )
 
 type testCreds struct {

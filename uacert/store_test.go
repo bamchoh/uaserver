@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // newUserCert creates a self-signed certificate without an application URI,

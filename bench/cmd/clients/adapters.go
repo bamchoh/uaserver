@@ -5,25 +5,25 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bamchoh/uaserver/bench/internal/memstat"
-	"github.com/bamchoh/uaserver/client"
-	ua "github.com/bamchoh/uaserver/ua"
-	uaid "github.com/bamchoh/uaserver/ua/id"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/bench/internal/memstat"
+	"github.com/bamchoh/uastack/client"
+	ua "github.com/bamchoh/uastack/ua"
+	uaid "github.com/bamchoh/uastack/ua/id"
+	"github.com/bamchoh/uastack/uasc"
 	"github.com/gopcua/opcua"
 	gid "github.com/gopcua/opcua/id"
 	gua "github.com/gopcua/opcua/ua"
 )
 
-// --- uaserver client ---
+// --- uastack client ---
 
-type uaserverClient struct {
+type uastackClient struct {
 	c   *client.Client
 	e   *env
 	ids []ua.NodeId
 }
 
-func dialUAServer(ctx context.Context, e *env, secure bool) (benchClient, error) {
+func dialUAStack(ctx context.Context, e *env, secure bool) (benchClient, error) {
 	cfg := client.Config{
 		ApplicationURI: "urn:bench:client", RequestTimeout: 30 * time.Second, KeepAliveInterval: -1,
 	}
@@ -41,10 +41,10 @@ func dialUAServer(ctx context.Context, e *env, secure bool) (benchClient, error)
 	for i := range ids {
 		ids[i] = ua.NewStringNodeId(e.ns, e.varName(i))
 	}
-	return &uaserverClient{c: c, e: e, ids: ids}, nil
+	return &uastackClient{c: c, e: e, ids: ids}, nil
 }
 
-func (u *uaserverClient) read(ctx context.Context, n int) error {
+func (u *uastackClient) read(ctx context.Context, n int) error {
 	vs, err := u.c.ReadValues(ctx, u.ids[:n]...)
 	if err != nil {
 		return err
@@ -57,11 +57,11 @@ func (u *uaserverClient) read(ctx context.Context, n int) error {
 	return nil
 }
 
-func (u *uaserverClient) write(ctx context.Context, i int, v int32) error {
+func (u *uastackClient) write(ctx context.Context, i int, v int32) error {
 	return u.c.WriteValue(ctx, u.ids[i], ua.NewVariant(v))
 }
 
-func (u *uaserverClient) browse(ctx context.Context) (int, error) {
+func (u *uastackClient) browse(ctx context.Context) (int, error) {
 	refs, err := u.c.BrowseAll(ctx, ua.BrowseDescription{
 		NodeId: ua.NewNumericNodeId(u.e.ns, memstat.FolderID), BrowseDirection: ua.BrowseDirectionForward,
 		ReferenceTypeId: ua.NewNumericNodeId(0, uaid.HierarchicalReferences), IncludeSubtypes: true,
@@ -70,7 +70,7 @@ func (u *uaserverClient) browse(ctx context.Context) (int, error) {
 	return len(refs), err
 }
 
-func (u *uaserverClient) subscribe(ctx context.Context, i int) (func(int32) error, func(), error) {
+func (u *uastackClient) subscribe(ctx context.Context, i int) (func(int32) error, func(), error) {
 	sub, err := u.c.CreateSubscription(ctx, client.SubscriptionParams{PublishingInterval: 10 * time.Millisecond})
 	if err != nil {
 		return nil, nil, err
@@ -103,7 +103,7 @@ func (u *uaserverClient) subscribe(ctx context.Context, i int) (func(int32) erro
 	return wait, func() { _ = sub.Delete(context.Background()) }, nil
 }
 
-func (u *uaserverClient) close(ctx context.Context) { _ = u.c.Close(ctx) }
+func (u *uastackClient) close(ctx context.Context) { _ = u.c.Close(ctx) }
 
 // --- gopcua client ---
 

@@ -14,7 +14,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/bamchoh/uaserver/bench/internal/memstat"
+	"github.com/bamchoh/uastack/bench/internal/memstat"
 	"github.com/gopcua/opcua/id"
 	"github.com/gopcua/opcua/server"
 	"github.com/gopcua/opcua/ua"
@@ -42,7 +42,7 @@ func main() {
 		server.EnableSecurity("Basic256Sha256", ua.MessageSecurityModeSignAndEncrypt),
 		server.EnableAuthMode(ua.UserTokenTypeAnonymous),
 		// gopcua listens on the host of the first endpoint. A wildcard host makes
-		// it listen on both IPv4 and IPv6, like the uaserver side; with only
+		// it listen on both IPv4 and IPv6, like the uastack side; with only
 		// "localhost" it listens on ::1 alone and IPv4 clients (e.g. UaExpert)
 		// are refused, which Windows retries for about 2 s per connection.
 		server.EndPoint("[::]", *port),
@@ -52,7 +52,7 @@ func main() {
 		server.SetLogger(quietLogger{}),
 	)
 	ns := server.NewNodeNameSpace(s, memstat.NamespaceURI)
-	folder := ns.Objects() // numeric id 85 in the bench namespace, like the uaserver side
+	folder := ns.Objects() // numeric id 85 in the bench namespace, like the uastack side
 	root, err := s.Namespace(0)
 	if err != nil {
 		log.Fatal(err)

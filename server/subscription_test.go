@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // subscribe creates a subscription with one monitored item on nid and waits

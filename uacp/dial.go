@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // ClientLimits are the limits a client offers in its Hello message.

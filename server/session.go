@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 // Session is a client session.

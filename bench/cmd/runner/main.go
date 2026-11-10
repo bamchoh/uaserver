@@ -1,4 +1,4 @@
-// Command runner benchmarks the uaserver and gopcua servers with the same
+// Command runner benchmarks the uastack and gopcua servers with the same
 // gopcua client and prints the results as a Markdown table.
 //
 //	cd bench && go run ./cmd/runner
@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamchoh/uaserver/bench/internal/memstat"
+	"github.com/bamchoh/uastack/bench/internal/memstat"
 	"github.com/gopcua/opcua"
 	"github.com/gopcua/opcua/id"
 	"github.com/gopcua/opcua/ua"
@@ -38,7 +38,7 @@ import (
 
 var (
 	scale  = flag.Float64("scale", 1, "multiplier for the number of iterations")
-	only   = flag.String("only", "", "run only the server with this name (uaserver or gopcua)")
+	only   = flag.String("only", "", "run only the server with this name (uastack or gopcua)")
 	onlySc = flag.String("scenarios", "", "comma separated scenario keys to run (default: all)")
 	cpu    = flag.String("cpu", "", "CPU description to print in the environment section")
 	output = flag.String("o", "", "also write the Markdown report to this file")
@@ -51,7 +51,7 @@ type serverDef struct {
 }
 
 var servers = []serverDef{
-	{"uaserver", "./cmd/srv-uaserver", 48501},
+	{"uastack", "./cmd/srv-uastack", 48501},
 	{"gopcua", "./cmd/srv-gopcua", 48502},
 }
 

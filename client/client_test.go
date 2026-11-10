@@ -20,12 +20,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bamchoh/uaserver/client"
-	"github.com/bamchoh/uaserver/server"
-	"github.com/bamchoh/uaserver/ua"
-	uaid "github.com/bamchoh/uaserver/ua/id"
-	"github.com/bamchoh/uaserver/uacert"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/client"
+	"github.com/bamchoh/uastack/server"
+	"github.com/bamchoh/uastack/ua"
+	uaid "github.com/bamchoh/uastack/ua/id"
+	"github.com/bamchoh/uastack/uacert"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 const testNS = "urn:client-test"

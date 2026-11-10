@@ -9,7 +9,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // Message types.

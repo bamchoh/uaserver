@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bamchoh/uaserver/ua"
-	uaid "github.com/bamchoh/uaserver/ua/id"
+	"github.com/bamchoh/uastack/ua"
+	uaid "github.com/bamchoh/uastack/ua/id"
 )
 
 // --- Attribute service set ---

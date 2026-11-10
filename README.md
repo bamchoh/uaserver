@@ -1,9 +1,9 @@
-# uaserver
+# uastack
 
 English | [日本語](README.ja-JP.md)
 
-An OPC UA server library for Go, ported from the server side of [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard),
-with a client that shares its encoding and security code.
+An OPC UA stack for Go with a server and a client. The server is ported from the server side of [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard);
+the client shares its encoding, security and certificate code.
 It has no dependencies beyond the Go standard library.
 
 ## Features
@@ -31,7 +31,7 @@ It has no dependencies beyond the Go standard library.
 ## Comparison with gopcua
 
 [gopcua/opcua](https://github.com/gopcua/opcua) is the most widely used OPC UA library for Go.
-gopcua focuses on the client and is used in many production environments; uaserver focuses on the server, and its client is new.
+gopcua focuses on the client and is used in many production environments; uastack focuses on the server, and its client is new.
 
 The comparison below is based on reading the source of gopcua's main branch (commit `79fa869`, as of 2026-11-09),
 not on the table in gopcua's README (a service that only returns `BadServiceUnsupported` is marked "No").
@@ -41,7 +41,7 @@ gopcua is actively developed, so check gopcua itself for its current state.
 
 ### Overview
 
-| | uaserver | gopcua |
+| | uastack | gopcua |
 |---|---|---|
 | Main use | Server | Client (the server is in development) |
 | Client | Yes (new, see [Client](#client)) | Yes (widely used in production) |
@@ -53,7 +53,7 @@ gopcua is actively developed, so check gopcua itself for its current state.
 
 ### Security
 
-| | uaserver server | gopcua server | uaserver client | gopcua client |
+| | uastack server | gopcua server | uastack client | gopcua client |
 |---|---|---|---|---|
 | None | Yes | Yes | Yes | Yes |
 | Basic128Rsa15 (deprecated) | No | Partial, untested *1 | No | Yes |
@@ -74,7 +74,7 @@ gopcua is actively developed, so check gopcua itself for its current state.
 
 ### Services (server)
 
-| Service set | Service | uaserver | gopcua server |
+| Service set | Service | uastack | gopcua server |
 |---|---|---|---|
 | Discovery | FindServers / GetEndpoints | Yes | Yes |
 | | FindServersOnNetwork | Partial, returns an empty list | No |
@@ -98,24 +98,24 @@ gopcua is actively developed, so check gopcua itself for its current state.
 
 ### Performance
 
-The same client (gopcua v0.9.1) sent the same operations to uaserver and to the gopcua v0.9.1 server.
+The same client (gopcua v0.9.1) sent the same operations to uastack and to the gopcua v0.9.1 server.
 Both servers hold the same 1000 Int32 variables in the same namespace.
-The benchmark code is in [`bench/`](bench); it is a separate module, so uaserver itself does not depend on gopcua.
+The benchmark code is in [`bench/`](bench); it is a separate module, so uastack itself does not depend on gopcua.
 
 Environment: Windows 11 / amd64, Intel Core i7-11800H (16 logical cores), Go 1.25.6, server and client on the same machine (localhost).
 Each benchmark was run three times; every result stayed within a few percent, and one run is shown.
 
-| | uaserver | gopcua | Difference |
+| | uastack | gopcua | Difference |
 |---|---|---|---|
-| Connect and disconnect (None) | 1.75 ms | 1.91 ms | uaserver about 10% faster |
+| Connect and disconnect (None) | 1.75 ms | 1.91 ms | uastack about 10% faster |
 | Connect and disconnect (Basic256Sha256 / SignAndEncrypt) | 12.0 ms | 11.7 ms | About the same (dominated by RSA) |
-| Read 1 node (None) | 72 µs (13,954/s) | 106 µs (9,428/s) | uaserver about 1.5x |
-| Read 1 node (Basic256Sha256 / SignAndEncrypt) | 83 µs (12,061/s) | 118 µs (8,469/s) | uaserver about 1.4x |
-| Read 1000 nodes in one request (None) | 1.99 ms (500k nodes/s) | 3.73 ms (270k nodes/s) | uaserver about 1.9x |
-| Read 1 node, 8 parallel clients (None) | 34,086/s | 23,755/s | uaserver about 1.4x |
-| Write 1 node (None) | 72 µs (13,850/s) | 100 µs (9,996/s) | uaserver about 1.4x |
-| Browse (folder with 1000 references) | 2.18 ms | 17.6 ms | uaserver about 8x |
-| Write to data change notification (a write every 50 ms) | under 1 ms * | 9.4 ms | uaserver notifies as soon as the value changes |
+| Read 1 node (None) | 72 µs (13,954/s) | 106 µs (9,428/s) | uastack about 1.5x |
+| Read 1 node (Basic256Sha256 / SignAndEncrypt) | 83 µs (12,061/s) | 118 µs (8,469/s) | uastack about 1.4x |
+| Read 1000 nodes in one request (None) | 1.99 ms (500k nodes/s) | 3.73 ms (270k nodes/s) | uastack about 1.9x |
+| Read 1 node, 8 parallel clients (None) | 34,086/s | 23,755/s | uastack about 1.4x |
+| Write 1 node (None) | 72 µs (13,850/s) | 100 µs (9,996/s) | uastack about 1.4x |
+| Browse (folder with 1000 references) | 2.18 ms | 17.6 ms | uastack about 8x |
+| Write to data change notification (a write every 50 ms) | under 1 ms * | 9.4 ms | uastack notifies as soon as the value changes |
 | Write to data change notification (next write right after each notification) | 10.0 ms | 10.0 ms | Same (limited by the 10 ms publishing interval) |
 | Memory: Go heap (idle) | 14.4 MB | 22.3 MB | |
 | Memory: Go heap (20 connected sessions) | 14.6 MB | 24.2 MB | |
@@ -128,8 +128,8 @@ The times include the client's own processing, so the difference between the ser
 
 **Notes on the results**
 
-- **Data change notifications**: when a value changes through `SetValue` or a client Write, uaserver creates the notification right away and sends it as soon as the publishing interval allows. gopcua waits for the next publishing cycle, so it is one publishing interval (10 ms here) late. When values are written back to back, both are limited by the publishing interval the client requested (one message per 10 ms). Variables that return their value from `OnRead` cannot report changes, so uaserver polls them every `Config.MinSamplingInterval` (50 ms by default).
-- **The Write comparison favors gopcua**: the gopcua server does not check the type or array shape of written values; uaserver does.
+- **Data change notifications**: when a value changes through `SetValue` or a client Write, uastack creates the notification right away and sends it as soon as the publishing interval allows. gopcua waits for the next publishing cycle, so it is one publishing interval (10 ms here) late. When values are written back to back, both are limited by the publishing interval the client requested (one message per 10 ms). Variables that return their value from `OnRead` cannot report changes, so uastack polls them every `Config.MinSamplingInterval` (50 ms by default).
+- **The Write comparison favors gopcua**: the gopcua server does not check the type or array shape of written values; uastack does.
 - **Only Basic256Sha256 / SignAndEncrypt is compared with security**: the other combinations are not implemented or not tested in the gopcua server.
 
 **Encoding and decoding**
@@ -137,39 +137,39 @@ The times include the client's own processing, so the difference between the ser
 The `ua` packages of both libraries were compared with `go test -bench` on the same messages.
 A test first checks that both produce exactly the same bytes.
 
-| Operation (1000 elements) | uaserver | gopcua | Difference |
+| Operation (1000 elements) | uastack | gopcua | Difference |
 |---|---|---|---|
 | Encode ReadResponse | 54 µs, 113 KB, 15 allocations | 343 µs, 257 KB, 6,786 allocations | about 6x |
 | Decode ReadResponse | 62 µs, 126 KB, 747 allocations | 316 µs, 229 KB, 5,506 allocations | about 5x |
 | Encode ReadRequest | 34 µs, 113 KB, 15 allocations | 1,067 µs, 628 KB, 17,792 allocations | about 31x |
 | Decode ReadRequest | 48 µs, 94 KB, 1,003 allocations | 990 µs, 503 KB, 11,764 allocations | about 21x |
 
-The main reason is the design: uaserver uses code generated from the schema, while gopcua uses reflection.
+The main reason is the design: uastack uses code generated from the schema, while gopcua uses reflection.
 
 ### Client performance
 
-The uaserver client and the gopcua v0.9.1 client ran the same operations against the same server, the uaserver benchmark server in a separate process.
+The uastack client and the gopcua v0.9.1 client ran the same operations against the same server, the uastack benchmark server in a separate process.
 The code is in [`bench/cmd/clients`](bench/cmd/clients). The environment is the same as above; each benchmark was run three times, and one run is shown.
 
-| | uaserver client | gopcua client | Difference |
+| | uastack client | gopcua client | Difference |
 |---|---|---|---|
-| Connect and disconnect (None) | 1.53 ms | 1.78 ms | uaserver about 1.2x * |
+| Connect and disconnect (None) | 1.53 ms | 1.78 ms | uastack about 1.2x * |
 | Connect and disconnect (Basic256Sha256 / SignAndEncrypt) | 10.9 ms | 11.4 ms | About the same (dominated by RSA) |
-| Read 1 node (None) | 49 µs, 15 allocations / 2.2 KB | 73 µs, 131 allocations / 68 KB | uaserver about 1.5x |
-| Read 1 node (Basic256Sha256 / SignAndEncrypt) | 54 µs, 32 allocations / 5.6 KB | 80 µs, 151 allocations / 72 KB | uaserver about 1.5x |
-| Read 1000 nodes in one request (None) | 497 µs (2.0M nodes/s), 782 allocations / 581 KB | 1.92 ms (522k nodes/s), 26,370 allocations / 1.1 MB | uaserver about 3.9x |
-| Read 1000 nodes in one request (Basic256Sha256 / SignAndEncrypt) | 630 µs | 2.06 ms | uaserver about 3.3x |
-| Read 1 node, 8 parallel requests on one client (None) | 73,705/s | 23,417/s | uaserver about 3.1x |
-| Write 1 node (None) | 46 µs, 17 allocations / 2.1 KB | 73 µs, 121 allocations / 68 KB | uaserver about 1.6x |
-| Browse (folder with 1000 references) | 525 µs | 2.19 ms | uaserver about 4.2x |
+| Read 1 node (None) | 49 µs, 15 allocations / 2.2 KB | 73 µs, 131 allocations / 68 KB | uastack about 1.5x |
+| Read 1 node (Basic256Sha256 / SignAndEncrypt) | 54 µs, 32 allocations / 5.6 KB | 80 µs, 151 allocations / 72 KB | uastack about 1.5x |
+| Read 1000 nodes in one request (None) | 497 µs (2.0M nodes/s), 782 allocations / 581 KB | 1.92 ms (522k nodes/s), 26,370 allocations / 1.1 MB | uastack about 3.9x |
+| Read 1000 nodes in one request (Basic256Sha256 / SignAndEncrypt) | 630 µs | 2.06 ms | uastack about 3.3x |
+| Read 1 node, 8 parallel requests on one client (None) | 73,705/s | 23,417/s | uastack about 3.1x |
+| Write 1 node (None) | 46 µs, 17 allocations / 2.1 KB | 73 µs, 121 allocations / 68 KB | uastack about 1.6x |
+| Browse (folder with 1000 references) | 525 µs | 2.19 ms | uastack about 4.2x |
 | Write to data change notification | 10.0 ms | 10.0 ms | Same (limited by the 10 ms publishing interval) |
 | Client heap growth with 20 connected sessions | 1.2 MB | 5.5 MB | |
 
 Allocations are per operation in the client process.
-With the gopcua server instead, the uaserver client was about 1.3x faster for single reads and writes and about 1.7x for 1000 nodes; the server is then the larger part of the time.
+With the gopcua server instead, the uastack client was about 1.3x faster for single reads and writes and about 1.7x for 1000 nodes; the server is then the larger part of the time.
 
-\* One of the three runs measured 4.6 ms for the uaserver client; the other two measured 1.53 and 1.54 ms.
-The uaserver client skips GetEndpoints for the None policy and takes the endpoint from the CreateSession response.
+\* One of the three runs measured 4.6 ms for the uastack client; the other two measured 1.53 and 1.54 ms.
+The uastack client skips GetEndpoints for the None policy and takes the endpoint from the CreateSession response.
 
 **Reproducing**
 
@@ -185,10 +185,10 @@ Results vary between machines and operating systems; use the ratios rather than 
 ### Which one to use
 
 - **To connect to OPC UA servers and read or write values** (a client): gopcua is the proven choice and supports the deprecated policies.
-  uaserver's client is new; it adds the ECC policies, a trust list for server certificates and notifications delivered in order,
+  uastack's client is new; it adds the ECC policies, a trust list for server certificates and notifications delivered in order,
   and it is faster and allocates less (see [Client performance](#client-performance)).
-- **To build an OPC UA server in Go**: uaserver covers more, including authentication, certificate trust management, method calls and the full set of subscription services.
-- **To connect to old devices that only support the deprecated policies (Basic128Rsa15 / Basic256)**: uaserver does not support them.
+- **To build an OPC UA server in Go**: uastack covers more, including authentication, certificate trust management, method calls and the full set of subscription services.
+- **To connect to old devices that only support the deprecated policies (Basic128Rsa15 / Basic256)**: uastack does not support them.
 
 ## Usage
 
@@ -230,10 +230,10 @@ A written matrix may not be larger than the variable's ArrayDimensions.
 ### Using the library
 
 ```sh
-go get github.com/bamchoh/uaserver/server
+go get github.com/bamchoh/uastack/server
 ```
 
-The packages are `github.com/bamchoh/uaserver/server` (the server), `.../ua` (types and encoding) and `.../uasc` (security policies).
+The packages are `github.com/bamchoh/uastack/server` (the server), `.../ua` (types and encoding) and `.../uasc` (security policies).
 
 ```go
 srv, _ := server.New(server.Config{

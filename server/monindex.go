@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // monitorIndex maps variables to the monitored items that watch their Value
