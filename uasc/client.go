@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uacp"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uacp"
 )
 
 // ClientConfig configures the client side of a secure channel.

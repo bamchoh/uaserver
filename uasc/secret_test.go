@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 func TestEccEncryptedSecretRoundTrip(t *testing.T) {

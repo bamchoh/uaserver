@@ -3,7 +3,7 @@ package client
 import (
 	"testing"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 func dataMsg(seq uint32, v int32) ua.NotificationMessage {

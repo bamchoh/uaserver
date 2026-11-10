@@ -1,4 +1,4 @@
-// Command srv-uaserver is the uaserver side of the benchmark.
+// Command srv-uastack is the uastack side of the benchmark.
 package main
 
 import (
@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/bamchoh/uaserver/bench/internal/memstat"
-	"github.com/bamchoh/uaserver/server"
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/bench/internal/memstat"
+	"github.com/bamchoh/uastack/server"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 func main() {
@@ -19,14 +19,14 @@ func main() {
 	pki := flag.String("pki", "", "certificate store (default: a temporary directory)")
 	flag.Parse()
 	if *pki == "" {
-		d, err := os.MkdirTemp("", "bench-uaserver-pki")
+		d, err := os.MkdirTemp("", "bench-uastack-pki")
 		if err != nil {
 			log.Fatal(err)
 		}
 		*pki = d
 	}
 	srv, err := server.New(server.Config{
-		ApplicationName: "bench-uaserver",
+		ApplicationName: "bench-uastack",
 		ListenAddr:      fmt.Sprintf(":%d", *port),
 		EndpointURL:     fmt.Sprintf("opc.tcp://localhost:%d", *port),
 		PKIDir:          *pki,

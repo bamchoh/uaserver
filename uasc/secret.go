@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
+	"github.com/bamchoh/uastack/ua"
 )
 
 // This file implements the EccEncryptedSecret format (Part 4, 7.41.2.3),

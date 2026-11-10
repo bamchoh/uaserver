@@ -3,8 +3,8 @@ package server
 import (
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/ua/id"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/ua/id"
 )
 
 func nid(i uint32) ua.NodeId { return ua.NewNumericNodeId(0, i) }

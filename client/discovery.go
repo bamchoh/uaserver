@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uacp"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uacp"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 // GetEndpoints returns the endpoints of the server at endpointURL. It uses a

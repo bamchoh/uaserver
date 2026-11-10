@@ -1,9 +1,9 @@
-# uaserver
+# uastack
 
 [English](README.md) | 日本語
 
-[OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard) のサーバー機能を Go に移植したものです。
-エンコーディングとセキュリティのコードを共有するクライアントも入っています。
+サーバーとクライアントを備えた Go の OPC UA スタックです。サーバーは [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard) のサーバー機能を移植したもので、
+クライアントはエンコーディング・セキュリティ・証明書のコードをサーバーと共有しています。
 外部ライブラリには依存せず、標準ライブラリだけで書いています。
 
 ## できること
@@ -31,7 +31,7 @@
 ## gopcua との比較
 
 Go の OPC UA ライブラリとしては [gopcua/opcua](https://github.com/gopcua/opcua) が広く使われています。
-gopcua はクライアントが中心で、多くの本番環境で使われています。uaserver はサーバーが中心で、クライアントは新しく追加したものです。
+gopcua はクライアントが中心で、多くの本番環境で使われています。uastack はサーバーが中心で、クライアントは新しく追加したものです。
 
 以下は gopcua の main ブランチ（コミット `79fa869`、2026-11-09 時点）のソースを読んで比較したものです。
 gopcua の README の表ではなく、コードの実装状況を基準にしています（`BadServiceUnsupported` を返すだけのサービスは「×」）。
@@ -41,7 +41,7 @@ gopcua は活発に開発されているので、最新の状況は gopcua 側�
 
 ### 全体
 
-| 項目 | uaserver | gopcua |
+| 項目 | uastack | gopcua |
 |---|---|---|
 | 主な用途 | サーバー | クライアント（サーバーは開発中） |
 | クライアント | ○（新規。[クライアント](#クライアント) を参照） | ○（本番での利用実績が多い） |
@@ -53,7 +53,7 @@ gopcua は活発に開発されているので、最新の状況は gopcua 側�
 
 ### セキュリティ
 
-| 項目 | uaserver サーバー | gopcua サーバー | uaserver クライアント | gopcua クライアント |
+| 項目 | uastack サーバー | gopcua サーバー | uastack クライアント | gopcua クライアント |
 |---|---|---|---|---|
 | None | ○ | ○ | ○ | ○ |
 | Basic128Rsa15（廃止） | × | △ 未検証 ※1 | × | ○ |
@@ -74,7 +74,7 @@ gopcua は活発に開発されているので、最新の状況は gopcua 側�
 
 ### サービス（サーバー）
 
-| サービスセット | サービス | uaserver | gopcua サーバー |
+| サービスセット | サービス | uastack | gopcua サーバー |
 |---|---|---|---|
 | Discovery | FindServers / GetEndpoints | ○ | ○ |
 | | FindServersOnNetwork | △ 空の一覧を返す | × |
@@ -98,24 +98,24 @@ gopcua は活発に開発されているので、最新の状況は gopcua 側�
 
 ### パフォーマンス
 
-同じクライアント（gopcua v0.9.1）から、uaserver と gopcua v0.9.1 のサーバーに同じ操作を投げて測りました。
+同じクライアント（gopcua v0.9.1）から、uastack と gopcua v0.9.1 のサーバーに同じ操作を投げて測りました。
 両サーバーには、同じ名前空間に同じ 1000 個の Int32 変数を置いています。
-測定コードは [`bench/`](bench) にあり、本体とは別のモジュールなので、uaserver 本体は gopcua に依存しません。
+測定コードは [`bench/`](bench) にあり、本体とは別のモジュールなので、uastack 本体は gopcua に依存しません。
 
 測定環境：Windows 11 / amd64、Intel Core i7-11800H（16 論理コア）、Go 1.25.6、サーバーとクライアントは同じマシン（localhost）。
 3 回測り、どの項目も数 % 以内に収まったので、そのうち 1 回分を載せています。
 
-| 項目 | uaserver | gopcua | 差 |
+| 項目 | uastack | gopcua | 差 |
 |---|---|---|---|
-| 接続の確立と切断（None） | 1.75 ms | 1.91 ms | uaserver が約 10% 速い |
+| 接続の確立と切断（None） | 1.75 ms | 1.91 ms | uastack が約 10% 速い |
 | 接続の確立と切断（Basic256Sha256 / SignAndEncrypt） | 12.0 ms | 11.7 ms | ほぼ同じ（RSA の処理が大半） |
-| Read 1 ノード（None） | 72 µs（13,954 回/秒） | 106 µs（9,428 回/秒） | uaserver が約 1.5 倍 |
-| Read 1 ノード（Basic256Sha256 / SignAndEncrypt） | 83 µs（12,061 回/秒） | 118 µs（8,469 回/秒） | uaserver が約 1.4 倍 |
-| Read 1000 ノードを 1 回で（None） | 1.99 ms（50 万ノード/秒） | 3.73 ms（27 万ノード/秒） | uaserver が約 1.9 倍 |
-| Read 1 ノード、8 クライアント並列（None） | 34,086 回/秒 | 23,755 回/秒 | uaserver が約 1.4 倍 |
-| Write 1 ノード（None） | 72 µs（13,850 回/秒） | 100 µs（9,996 回/秒） | uaserver が約 1.4 倍 |
-| Browse（1000 参照のフォルダ） | 2.18 ms | 17.6 ms | uaserver が約 8 倍 |
-| Write してからデータ変化通知が届くまで（50 ms おきに書き込み） | 1 ms 未満 ※ | 9.4 ms | uaserver は変化した瞬間に通知 |
+| Read 1 ノード（None） | 72 µs（13,954 回/秒） | 106 µs（9,428 回/秒） | uastack が約 1.5 倍 |
+| Read 1 ノード（Basic256Sha256 / SignAndEncrypt） | 83 µs（12,061 回/秒） | 118 µs（8,469 回/秒） | uastack が約 1.4 倍 |
+| Read 1000 ノードを 1 回で（None） | 1.99 ms（50 万ノード/秒） | 3.73 ms（27 万ノード/秒） | uastack が約 1.9 倍 |
+| Read 1 ノード、8 クライアント並列（None） | 34,086 回/秒 | 23,755 回/秒 | uastack が約 1.4 倍 |
+| Write 1 ノード（None） | 72 µs（13,850 回/秒） | 100 µs（9,996 回/秒） | uastack が約 1.4 倍 |
+| Browse（1000 参照のフォルダ） | 2.18 ms | 17.6 ms | uastack が約 8 倍 |
+| Write してからデータ変化通知が届くまで（50 ms おきに書き込み） | 1 ms 未満 ※ | 9.4 ms | uastack は変化した瞬間に通知 |
 | Write してからデータ変化通知が届くまで（通知を受けたらすぐ次を書き込み） | 10.0 ms | 10.0 ms | 同じ（送信間隔 10 ms の上限） |
 | メモリ：Go ヒープ（起動直後） | 14.4 MB | 22.3 MB | |
 | メモリ：Go ヒープ（20 セッション接続中） | 14.6 MB | 24.2 MB | |
@@ -128,8 +128,8 @@ Windows では Go の時計の分解能が 0.1〜0.5 ms 程度しかなく、1 �
 
 **結果を読むときの注意**
 
-- **データ変化通知**：uaserver は、`SetValue` やクライアントの Write で値が変わると、その場で通知を作り、送信間隔（Publishing Interval）を守れる範囲ですぐ送ります。gopcua は次の送信周期を待って送るので、送信間隔ぶん（ここでは 10 ms）遅れます。値を立て続けに書き込む場合は、どちらもクライアントが要求した送信間隔（10 ms に 1 通）が上限になります。`OnRead` で値を返す変数は変化を検知できないので、uaserver は `Config.MinSamplingInterval`（既定 50 ms）ごとに見回って通知します。
-- **Write の比較は gopcua に有利**：gopcua のサーバーは、書き込む値の型や配列の形を検査しません。uaserver は検査しています。
+- **データ変化通知**：uastack は、`SetValue` やクライアントの Write で値が変わると、その場で通知を作り、送信間隔（Publishing Interval）を守れる範囲ですぐ送ります。gopcua は次の送信周期を待って送るので、送信間隔ぶん（ここでは 10 ms）遅れます。値を立て続けに書き込む場合は、どちらもクライアントが要求した送信間隔（10 ms に 1 通）が上限になります。`OnRead` で値を返す変数は変化を検知できないので、uastack は `Config.MinSamplingInterval`（既定 50 ms）ごとに見回って通知します。
+- **Write の比較は gopcua に有利**：gopcua のサーバーは、書き込む値の型や配列の形を検査しません。uastack は検査しています。
 - **暗号化ありの比較は Basic256Sha256 / SignAndEncrypt だけ**：gopcua のサーバーでは、ほかの組み合わせが未実装または未検証のためです。
 
 **エンコード / デコード**
@@ -137,39 +137,39 @@ Windows では Go の時計の分解能が 0.1〜0.5 ms 程度しかなく、1 �
 両ライブラリの `ua` パッケージで、同じメッセージを変換する速さを `go test -bench` で比べました。
 まず、両者がまったく同じバイト列を出力することをテストで確認しています。
 
-| 処理（1000 要素） | uaserver | gopcua | 差 |
+| 処理（1000 要素） | uastack | gopcua | 差 |
 |---|---|---|---|
 | ReadResponse のエンコード | 54 µs、113 KB、15 回の割り当て | 343 µs、257 KB、6,786 回 | 約 6 倍 |
 | ReadResponse のデコード | 62 µs、126 KB、747 回 | 316 µs、229 KB、5,506 回 | 約 5 倍 |
 | ReadRequest のエンコード | 34 µs、113 KB、15 回 | 1,067 µs、628 KB、17,792 回 | 約 31 倍 |
 | ReadRequest のデコード | 48 µs、94 KB、1,003 回 | 990 µs、503 KB、11,764 回 | 約 21 倍 |
 
-差の主な理由は作りの違いです。uaserver はスキーマから生成した専用のコードで変換し、gopcua はリフレクションで汎用的に変換しています。
+差の主な理由は作りの違いです。uastack はスキーマから生成した専用のコードで変換し、gopcua はリフレクションで汎用的に変換しています。
 
 ### クライアントの性能
 
-uaserver のクライアントと gopcua v0.9.1 のクライアントで、同じサーバー（別プロセスで動かした uaserver のベンチマーク用サーバー）に同じ操作をして測りました。
+uastack のクライアントと gopcua v0.9.1 のクライアントで、同じサーバー（別プロセスで動かした uastack のベンチマーク用サーバー）に同じ操作をして測りました。
 コードは [`bench/cmd/clients`](bench/cmd/clients) にあります。測定環境は上と同じで、3 回ずつ測ったうちの 1 回を載せています。
 
-| 項目 | uaserver クライアント | gopcua クライアント | 差 |
+| 項目 | uastack クライアント | gopcua クライアント | 差 |
 |---|---|---|---|
-| 接続と切断（None） | 1.53 ms | 1.78 ms | uaserver が約 1.2 倍 ※ |
+| 接続と切断（None） | 1.53 ms | 1.78 ms | uastack が約 1.2 倍 ※ |
 | 接続と切断（Basic256Sha256 / SignAndEncrypt） | 10.9 ms | 11.4 ms | ほぼ同じ（RSA の処理が大半） |
-| Read 1 ノード（None） | 49 µs、割り当て 15 回 / 2.2 KB | 73 µs、割り当て 131 回 / 68 KB | uaserver が約 1.5 倍 |
-| Read 1 ノード（Basic256Sha256 / SignAndEncrypt） | 54 µs、割り当て 32 回 / 5.6 KB | 80 µs、割り当て 151 回 / 72 KB | uaserver が約 1.5 倍 |
-| Read 1000 ノードを 1 回で（None） | 497 µs（200 万ノード/秒）、割り当て 782 回 / 581 KB | 1.92 ms（52 万ノード/秒）、割り当て 26,370 回 / 1.1 MB | uaserver が約 3.9 倍 |
-| Read 1000 ノードを 1 回で（Basic256Sha256 / SignAndEncrypt） | 630 µs | 2.06 ms | uaserver が約 3.3 倍 |
-| Read 1 ノード、1 クライアントから 8 並列（None） | 73,705 回/秒 | 23,417 回/秒 | uaserver が約 3.1 倍 |
-| Write 1 ノード（None） | 46 µs、割り当て 17 回 / 2.1 KB | 73 µs、割り当て 121 回 / 68 KB | uaserver が約 1.6 倍 |
-| Browse（1000 参照のフォルダ） | 525 µs | 2.19 ms | uaserver が約 4.2 倍 |
+| Read 1 ノード（None） | 49 µs、割り当て 15 回 / 2.2 KB | 73 µs、割り当て 131 回 / 68 KB | uastack が約 1.5 倍 |
+| Read 1 ノード（Basic256Sha256 / SignAndEncrypt） | 54 µs、割り当て 32 回 / 5.6 KB | 80 µs、割り当て 151 回 / 72 KB | uastack が約 1.5 倍 |
+| Read 1000 ノードを 1 回で（None） | 497 µs（200 万ノード/秒）、割り当て 782 回 / 581 KB | 1.92 ms（52 万ノード/秒）、割り当て 26,370 回 / 1.1 MB | uastack が約 3.9 倍 |
+| Read 1000 ノードを 1 回で（Basic256Sha256 / SignAndEncrypt） | 630 µs | 2.06 ms | uastack が約 3.3 倍 |
+| Read 1 ノード、1 クライアントから 8 並列（None） | 73,705 回/秒 | 23,417 回/秒 | uastack が約 3.1 倍 |
+| Write 1 ノード（None） | 46 µs、割り当て 17 回 / 2.1 KB | 73 µs、割り当て 121 回 / 68 KB | uastack が約 1.6 倍 |
+| Browse（1000 参照のフォルダ） | 525 µs | 2.19 ms | uastack が約 4.2 倍 |
 | Write からデータ変化通知まで | 10.0 ms | 10.0 ms | 同じ（10 ms の送信間隔が上限） |
 | 20 セッション接続中のクライアントのヒープ増分 | 1.2 MB | 5.5 MB | |
 
 割り当ては、クライアントのプロセスでの 1 操作あたりの値です。
 サーバーを gopcua に替えた場合は、1 ノードの Read / Write で約 1.3 倍、1000 ノードで約 1.7 倍でした。その場合は時間の大半がサーバー側になります。
 
-※ 3 回のうち 1 回だけ uaserver クライアントが 4.6 ms になりました。ほかの 2 回は 1.53 ms と 1.54 ms です。
-uaserver クライアントは None ポリシーでは GetEndpoints を省き、CreateSession の応答からエンドポイントを取ります。
+※ 3 回のうち 1 回だけ uastack クライアントが 4.6 ms になりました。ほかの 2 回は 1.53 ms と 1.54 ms です。
+uastack クライアントは None ポリシーでは GetEndpoints を省き、CreateSession の応答からエンドポイントを取ります。
 
 **再現方法**
 
@@ -185,10 +185,10 @@ go test -bench . -benchmem    # エンコード / デコードの比較
 ### どちらを選ぶか
 
 - **OPC UA サーバーに接続して値を読み書きしたい**（クライアント）：実績があり、廃止されたポリシーにも対応している gopcua が無難です。
-  uaserver のクライアントは新しいものですが、ECC ポリシー、サーバー証明書の信頼リスト、順序どおりの通知配信に対応しており、
+  uastack のクライアントは新しいものですが、ECC ポリシー、サーバー証明書の信頼リスト、順序どおりの通知配信に対応しており、
   速度と割り当て量でも上回っています（[クライアントの性能](#クライアントの性能) を参照）。
-- **Go で OPC UA サーバーを作りたい**：uaserver のほうが、認証、証明書の信頼管理、メソッド呼び出し、サブスクリプション系のサービスまで揃っています。
-- **廃止されたポリシー（Basic128Rsa15 / Basic256）しか使えない古い機器とつなぎたい**：uaserver は非対応です。
+- **Go で OPC UA サーバーを作りたい**：uastack のほうが、認証、証明書の信頼管理、メソッド呼び出し、サブスクリプション系のサービスまで揃っています。
+- **廃止されたポリシー（Basic128Rsa15 / Basic256）しか使えない古い機器とつなぎたい**：uastack は非対応です。
 
 ## 使い方
 
@@ -230,10 +230,10 @@ Dynamic と Methods 以外の変数は書き込みもできます。
 ### ライブラリとして使う
 
 ```sh
-go get github.com/bamchoh/uaserver/server
+go get github.com/bamchoh/uastack/server
 ```
 
-パッケージは `github.com/bamchoh/uaserver/server`（サーバー）、`.../ua`（型とエンコーディング）、`.../uasc`（セキュリティポリシー）です。
+パッケージは `github.com/bamchoh/uastack/server`（サーバー）、`.../ua`（型とエンコーディング）、`.../uasc`（セキュリティポリシー）です。
 
 ```go
 srv, _ := server.New(server.Config{

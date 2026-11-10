@@ -26,11 +26,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	uaid "github.com/bamchoh/uaserver/ua/id"
-	"github.com/bamchoh/uaserver/uacert"
-	"github.com/bamchoh/uaserver/uacp"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/ua"
+	uaid "github.com/bamchoh/uastack/ua/id"
+	"github.com/bamchoh/uastack/uacert"
+	"github.com/bamchoh/uastack/uacp"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 // Config configures a Client. The zero value connects to the None endpoint

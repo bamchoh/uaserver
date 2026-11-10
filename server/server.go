@@ -18,9 +18,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uacp"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uacp"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 // UserTokenType selects the user identity tokens offered by the server.

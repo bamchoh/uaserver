@@ -1,3 +1,3 @@
-module github.com/bamchoh/uaserver
+module github.com/bamchoh/uastack
 
 go 1.25.6

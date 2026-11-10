@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bamchoh/uaserver/client"
-	"github.com/bamchoh/uaserver/server"
-	"github.com/bamchoh/uaserver/ua"
-	"github.com/bamchoh/uaserver/uasc"
+	"github.com/bamchoh/uastack/client"
+	"github.com/bamchoh/uastack/server"
+	"github.com/bamchoh/uastack/ua"
+	"github.com/bamchoh/uastack/uasc"
 )
 
 // proxy forwards TCP connections to a server and can cut them.
