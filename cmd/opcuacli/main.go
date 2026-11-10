@@ -52,6 +52,7 @@ func main() {
 	autoAccept := flag.Bool("autoaccept", false, "trust every server certificate (testing only)")
 	interval := flag.Duration("interval", time.Second, "publishing interval for subscribe")
 	timeout := flag.Duration("timeout", 10*time.Second, "request timeout")
+	reconnect := flag.Bool("reconnect", false, "reconnect when the connection is lost (useful with subscribe)")
 	verbose := flag.Bool("v", false, "log diagnostics")
 	flag.Usage = usage
 	flag.Parse()
@@ -75,6 +76,12 @@ func main() {
 		PKIDir:                          *pki,
 		AutoAcceptUntrustedCertificates: *autoAccept,
 		RequestTimeout:                  *timeout,
+		AutoReconnect:                   *reconnect,
+		OnStateChange: func(s client.ConnState, err error) {
+			if s != client.StateClosed {
+				fmt.Fprintf(os.Stderr, "connection: %s %v\n", s, err)
+			}
+		},
 	}
 	if *verbose {
 		cfg.Logger = log.New(os.Stderr, "", log.LstdFlags)

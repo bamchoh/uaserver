@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/ecdh"
 	"crypto/subtle"
 	"crypto/x509"
 	"encoding/binary"
@@ -29,6 +30,10 @@ type Session struct {
 	lastSeen    time.Time
 	identity    Identity
 	localeIDs   []string
+	// eccKey is the ephemeral key handed out for ECC user token secrets
+	// (EccEncryptedSecret), and eccPolicy its security policy.
+	eccKey    *ecdh.PrivateKey
+	eccPolicy *uasc.SecurityPolicy
 
 	browseCPs map[string]*browseCP
 	cpCounter uint64
@@ -184,6 +189,9 @@ func (m *sessionManager) createSession(ch *uasc.Channel, r *ua.CreateSessionRequ
 		sig = ua.SignatureData{Algorithm: policy.AsymSignatureAlgorithm, Signature: b}
 	}
 
+	rh := respHeader(hdr, 0)
+	rh.AdditionalHeader = sess.ecdhKey(hdr)
+
 	m.mu.Lock()
 	m.sessions[sess.ID] = sess
 	m.byToken[sess.authToken] = sess
@@ -191,7 +199,7 @@ func (m *sessionManager) createSession(ch *uasc.Channel, r *ua.CreateSessionRequ
 	s.logf("session %q created (%s)", sess.Name, ch.RemoteAddr())
 
 	return &ua.CreateSessionResponse{
-		ResponseHeader:        respHeader(hdr, 0),
+		ResponseHeader:        rh,
 		SessionId:             sess.ID,
 		AuthenticationToken:   sess.authToken,
 		RevisedSessionTimeout: float64(timeout / time.Millisecond),
@@ -241,7 +249,7 @@ func (m *sessionManager) activateSession(ch *uasc.Channel, r *ua.ActivateSession
 	}
 
 	ep := s.endpointForChannel(ch)
-	identity, status := s.validateIdentity(ch, ep, sess.serverNonce, r.UserIdentityToken, r.UserTokenSignature)
+	identity, status := s.validateIdentity(ch, ep, sess, r.UserIdentityToken, r.UserTokenSignature)
 	if status != 0 {
 		s.logf("session %q: identity rejected: %s", sess.Name, status)
 		return fault(hdr, status)
@@ -263,10 +271,60 @@ func (m *sessionManager) activateSession(ch *uasc.Channel, r *ua.ActivateSession
 	sess.serverNonce = uasc.NewNonce(32)
 	s.logf("session %q activated (user: %s)", sess.Name, identityString(identity))
 
+	rh := respHeader(hdr, 0)
+	if identity.eccKeyUsed || ecdhRequested(hdr) != "" {
+		// A used key is replaced (Part 4, 7.41.2.3).
+		rh.AdditionalHeader = sess.ecdhKey(hdr)
+	}
 	return &ua.ActivateSessionResponse{
-		ResponseHeader: respHeader(hdr, 0),
+		ResponseHeader: rh,
 		ServerNonce:    sess.serverNonce,
 	}
+}
+
+// ecdhRequested returns the ECDHPolicyUri of a request header, if any.
+func ecdhRequested(hdr *ua.RequestHeader) string {
+	v, ok := ua.AdditionalParameter(hdr.AdditionalHeader, ua.AdditionalParameterECDHPolicyUri)
+	if !ok {
+		return ""
+	}
+	uri, _ := v.Value().(string)
+	return uri
+}
+
+// ecdhKey creates a new signed ephemeral key when the request asks for one
+// (or one was used and the previous policy applies) and returns the
+// AdditionalHeader of the response. Called with sess.mu held, or before the
+// session is published.
+func (sess *Session) ecdhKey(hdr *ua.RequestHeader) ua.ExtensionObject {
+	uri := ecdhRequested(hdr)
+	policy := sess.eccPolicy
+	if uri != "" {
+		policy = uasc.PolicyByURI(uri)
+	}
+	if uri == "" && policy == nil {
+		return ua.ExtensionObject{}
+	}
+	param := func(v ua.Variant) ua.ExtensionObject {
+		return ua.NewAdditionalHeader(ua.KeyValuePair{Key: ua.NewQualifiedName(0, ua.AdditionalParameterECDHKey), Value: v})
+	}
+	var cred *uasc.Credential
+	if policy != nil && policy.IsECC() {
+		cred = sess.srv.credential(policy.URI)
+	}
+	if cred == nil {
+		return param(ua.NewVariant(ua.StatusBadSecurityPolicyRejected))
+	}
+	key, pub, err := policy.NewEphemeralKey()
+	if err != nil {
+		return param(ua.NewVariant(ua.StatusBadInternalError))
+	}
+	sig, err := policy.SignEphemeralKey(cred, pub)
+	if err != nil {
+		return param(ua.NewVariant(ua.StatusBadInternalError))
+	}
+	sess.eccKey, sess.eccPolicy = key, policy
+	return param(ua.NewVariant(ua.NewExtensionObject(&ua.EphemeralKeyType{PublicKey: pub, Signature: sig})))
 }
 
 func identityString(i Identity) string {
@@ -291,8 +349,9 @@ func (s *Server) endpointForChannel(ch *uasc.Channel) *ua.EndpointDescription {
 	return nil
 }
 
-func (s *Server) validateIdentity(ch *uasc.Channel, ep *ua.EndpointDescription, serverNonce []byte,
+func (s *Server) validateIdentity(ch *uasc.Channel, ep *ua.EndpointDescription, sess *Session,
 	tok ua.ExtensionObject, tokSig ua.SignatureData) (Identity, ua.StatusCode) {
+	serverNonce := sess.serverNonce
 	if ep == nil {
 		return Identity{}, ua.StatusBadSecurityPolicyRejected
 	}
@@ -335,7 +394,19 @@ func (s *Server) validateIdentity(ch *uasc.Channel, ep *ua.EndpointDescription, 
 			return Identity{}, ua.StatusBadSecurityPolicyRejected
 		}
 		password := t.Password
-		if !sp.IsNone() {
+		eccKeyUsed := false
+		if sp.IsECC() {
+			// EccEncryptedSecret for the session's ephemeral key.
+			if sess.eccKey == nil || sess.eccPolicy != sp {
+				return Identity{}, ua.StatusBadIdentityTokenInvalid
+			}
+			pw, err := sp.DecryptSecretECC(t.Password, sess.eccKey, sess.clientCert, serverNonce)
+			if err != nil {
+				s.logf("session %q: %v", sess.Name, err)
+				return Identity{}, ua.StatusBadIdentityTokenInvalid
+			}
+			password, eccKeyUsed = pw, true
+		} else if !sp.IsNone() {
 			if t.EncryptionAlgorithm != sp.AsymEncryptionAlgorithm {
 				return Identity{}, ua.StatusBadIdentityTokenInvalid
 			}
@@ -359,7 +430,7 @@ func (s *Server) validateIdentity(ch *uasc.Channel, ep *ua.EndpointDescription, 
 		if s.cfg.AuthenticateUser == nil || !s.cfg.AuthenticateUser(t.UserName, string(password)) {
 			return Identity{}, ua.StatusBadUserAccessDenied
 		}
-		return Identity{Type: UserTokenUserName, UserName: t.UserName}, 0
+		return Identity{Type: UserTokenUserName, UserName: t.UserName, eccKeyUsed: eccKeyUsed}, 0
 
 	case *ua.X509IdentityToken:
 		p := findPolicy(t.PolicyId, ua.UserTokenTypeCertificate)

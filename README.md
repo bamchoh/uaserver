@@ -15,20 +15,18 @@ It has no dependencies beyond the Go standard library.
 | Security policies | None, Basic256Sha256, Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, ECC_nistP256, ECC_nistP384 (each with Sign and SignAndEncrypt) |
 | Secure channel | OPN (asymmetric encryption and signing), MSG (symmetric encryption and HMAC), token renewal, sequence number checks |
 | Certificates | Self-signed certificates created automatically (RSA and ECC P-256 / P-384), a `pki/{own,trusted,issuer,rejected}` store with the same layout as the .NET stack, CA chain validation |
-| User authentication | Anonymous, UserName (passwords are RSA encrypted, also on None endpoints), X509 certificates (ECC user certificates on ECC endpoints) |
+| User authentication | Anonymous, UserName (passwords are RSA encrypted, also on None endpoints; on ECC endpoints they are sent as an EccEncryptedSecret), X509 certificates (ECC user certificates on ECC endpoints) |
 | Address space | The official `Opc.Ua.NodeSet2.xml` (namespace 0) is embedded and loaded; custom NodeSet2 files can be loaded with `LoadNodeSet` |
-| Client | The same security policies, modes and user authentication as the server; GetEndpoints, FindServers, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write, Call and subscriptions with monitored items; token renewal and session keep-alive; any other service through `Client.Send` |
+| Client | The same security policies, modes and user authentication as the server; GetEndpoints, FindServers, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write, Call and subscriptions with monitored items; token renewal, session keep-alive and automatic reconnect; any other service through `Client.Send` |
 | Services | GetEndpoints, FindServers, CreateSession / ActivateSession / CloseSession, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write (with IndexRange and type checks), Call, all Subscription services (Create / Modify / SetPublishingMode / Publish / Republish / Transfer / Delete), all MonitoredItem services (data change notifications, absolute deadband) |
 
 ## Not supported
 
 - Events and alarms (EventFilter), history (HistoryRead/Update), Query, NodeManagement (AddNodes etc.)
 - PercentDeadband, SetTriggering, aggregate filters
-- UserName authentication on ECC endpoints (the EccEncryptedSecret password format is not implemented, so user name tokens are not offered on ECC endpoints)
 - The AesGcm / ChaChaPoly variants of the ECC policies, brainpool, curve25519 / curve448, and the deprecated Basic128Rsa15 / Basic256
 - HTTPS / WebSocket transports, PubSub, GDS, reverse connect
 - CRL (certificate revocation list) checks
-- Client: reconnecting and transferring the session after a lost connection, and encrypting passwords for ECC endpoints
 
 ## Comparison with gopcua
 
@@ -51,7 +49,7 @@ gopcua is actively developed, so check gopcua itself for its current state.
 | Origin | Port of UA-.NETStandard | Independent implementation |
 | Standard address space (namespace 0) | Yes, official NodeSet2 embedded | Yes, official NodeSet2 embedded |
 | Loading custom NodeSet2 files | Yes | Yes |
-| Interoperability testing | Server: interop tests against the official .NET client run in CI. Client: checked by hand against the official .NET server (2.0.1) and the gopcua server | — |
+| Interoperability testing | Server: interop tests against the official .NET client run in CI. Client: interop tests against the official .NET server run in CI; also checked by hand against the gopcua server | — |
 
 ### Security
 
@@ -65,7 +63,7 @@ gopcua is actively developed, so check gopcua itself for its current state.
 | Aes256_Sha256_RsaPss | Yes | Partial, untested *1 | Yes | Yes |
 | ECC_nistP256 / ECC_nistP384 | Yes | No | Yes | No |
 | Anonymous authentication | Yes | Yes | Yes | Yes |
-| UserName authentication | Yes, passwords are checked | Partial *2 | Yes (not on ECC endpoints) | Yes |
+| UserName authentication | Yes, passwords are checked | Partial *2 | Yes | Yes |
 | X509 user authentication | Yes, signature and trust list are checked | Partial *2 | Yes | Yes |
 | Peer certificate trust list (trusted / rejected) | Yes | No | Yes | No *3 |
 | Self-signed certificate creation | Yes | No, the library takes a certificate and key (the examples contain generation code) | Yes | No |
@@ -148,11 +146,37 @@ A test first checks that both produce exactly the same bytes.
 
 The main reason is the design: uaserver uses code generated from the schema, while gopcua uses reflection.
 
+### Client performance
+
+The uaserver client and the gopcua v0.9.1 client ran the same operations against the same server, the uaserver benchmark server in a separate process.
+The code is in [`bench/cmd/clients`](bench/cmd/clients). The environment is the same as above; each benchmark was run three times, and one run is shown.
+
+| | uaserver client | gopcua client | Difference |
+|---|---|---|---|
+| Connect and disconnect (None) | 1.53 ms | 1.78 ms | uaserver about 1.2x * |
+| Connect and disconnect (Basic256Sha256 / SignAndEncrypt) | 10.9 ms | 11.4 ms | About the same (dominated by RSA) |
+| Read 1 node (None) | 49 µs, 15 allocations / 2.2 KB | 73 µs, 131 allocations / 68 KB | uaserver about 1.5x |
+| Read 1 node (Basic256Sha256 / SignAndEncrypt) | 54 µs, 32 allocations / 5.6 KB | 80 µs, 151 allocations / 72 KB | uaserver about 1.5x |
+| Read 1000 nodes in one request (None) | 497 µs (2.0M nodes/s), 782 allocations / 581 KB | 1.92 ms (522k nodes/s), 26,370 allocations / 1.1 MB | uaserver about 3.9x |
+| Read 1000 nodes in one request (Basic256Sha256 / SignAndEncrypt) | 630 µs | 2.06 ms | uaserver about 3.3x |
+| Read 1 node, 8 parallel requests on one client (None) | 73,705/s | 23,417/s | uaserver about 3.1x |
+| Write 1 node (None) | 46 µs, 17 allocations / 2.1 KB | 73 µs, 121 allocations / 68 KB | uaserver about 1.6x |
+| Browse (folder with 1000 references) | 525 µs | 2.19 ms | uaserver about 4.2x |
+| Write to data change notification | 10.0 ms | 10.0 ms | Same (limited by the 10 ms publishing interval) |
+| Client heap growth with 20 connected sessions | 1.2 MB | 5.5 MB | |
+
+Allocations are per operation in the client process.
+With the gopcua server instead, the uaserver client was about 1.3x faster for single reads and writes and about 1.7x for 1000 nodes; the server is then the larger part of the time.
+
+\* One of the three runs measured 4.6 ms for the uaserver client; the other two measured 1.53 and 1.54 ms.
+The uaserver client skips GetEndpoints for the None policy and takes the endpoint from the CreateSession response.
+
 **Reproducing**
 
 ```sh
 cd bench
 go run ./cmd/runner           # server comparison (takes a few minutes)
+go run ./cmd/clients          # client comparison (-server gopcua to use the gopcua server)
 go test -bench . -benchmem    # encoding / decoding comparison
 ```
 
@@ -161,7 +185,8 @@ Results vary between machines and operating systems; use the ratios rather than 
 ### Which one to use
 
 - **To connect to OPC UA servers and read or write values** (a client): gopcua is the proven choice and supports the deprecated policies.
-  uaserver's client is new; it adds the ECC policies, a trust list for server certificates, and notifications delivered in order.
+  uaserver's client is new; it adds the ECC policies, a trust list for server certificates and notifications delivered in order,
+  and it is faster and allocates less (see [Client performance](#client-performance)).
 - **To build an OPC UA server in Go**: uaserver covers more, including authentication, certificate trust management, method calls and the full set of subscription services.
 - **To connect to old devices that only support the deprecated policies (Basic128Rsa15 / Basic256)**: uaserver does not support them.
 
@@ -278,7 +303,11 @@ for n := range sub.Notifications() { // in sequence number order
 - `client.X509(cert, key)` logs in with a user certificate. `GetEndpoints`, `SelectEndpoint` and `DialEndpoint` choose an endpoint explicitly.
 - Without `PKIDir` the client certificate is created in memory, and the server certificate must be accepted by `VerifyServerCertificate` or `AutoAcceptUntrustedCertificates`.
 - The session is kept alive while idle, and the security token is renewed before it expires.
-  When the connection is lost, `Done()` is closed, and each subscription's channel receives a notification with `Err` set and is then closed. The client does not reconnect.
+- With `AutoReconnect`, a lost connection is restored with backoff: the session is activated on a new secure channel, and notifications sent on the lost channel are fetched again with Republish.
+  If the server has dropped the session, a new one is created and the subscriptions are transferred, or created again with the same monitored items and client handles.
+  Requests made while reconnecting wait until the connection is back or their context ends; requests that were in flight when the connection broke fail and are not resent.
+  `OnStateChange` reports the changes (`StateConnected`, `StateReconnecting`, `StateClosed`).
+- Without `AutoReconnect`, `Done()` is closed when the connection is lost, and each subscription's channel receives a notification with `Err` set and is then closed.
 
 ## Package layout
 
@@ -310,3 +339,13 @@ cd tests/interop/dotnet && dotnet run -- opc.tcp://localhost:48400
 
 They cover every security policy (including ECC) and mode, anonymous, user name and X509 (RSA and ECC) authentication,
 Browse / Translate / Read / Write / Call, reading 4000 nodes at once (multiple chunks), Subscription and Publish, and token renewal (RSA and ECC).
+
+Interoperability tests of the client with a server built on the official .NET stack (OPCFoundation.NetStandard.Opc.Ua.Server 2.0.1):
+
+```sh
+cd tests/interop/dotnet-server && dotnet run -- 48600      # prints READY when listening
+go run ./tests/interop/goclient opc.tcp://localhost:48600   # from the repository root
+```
+
+They connect to every endpoint (each policy and mode, including ECC) with anonymous, user name (including a wrong password) and X509 (RSA and ECC) identities,
+and read, browse, write and receive data change notifications on each. Both interop tests run in CI.

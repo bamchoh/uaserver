@@ -3,3 +3,5 @@
 tests/interop/dotnet/bin/
 tests/interop/dotnet/obj/
 /pki-client/
+tests/interop/dotnet-server/bin/
+tests/interop/dotnet-server/obj/

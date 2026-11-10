@@ -181,13 +181,6 @@ func TestAllEndpointsAndIdentities(t *testing.T) {
 				c, err := client.DialEndpoint(ctx(t), ts.url, ep, client.Config{
 					Identity: id, AutoAcceptUntrustedCertificates: true,
 				})
-				if name == "UserName" && policy.IsECC() {
-					// User name tokens are not offered on ECC endpoints.
-					if !errors.Is(err, ua.StatusBadIdentityTokenInvalid) {
-						t.Fatalf("got %v, want BadIdentityTokenInvalid", err)
-					}
-					return
-				}
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -210,9 +203,13 @@ func TestAllEndpointsAndIdentities(t *testing.T) {
 
 func TestWrongPassword(t *testing.T) {
 	ts := startServer(t, true)
-	_, err := client.Dial(ctx(t), ts.url, client.Config{Identity: client.UserName("user1", "wrong")})
-	if !errors.Is(err, ua.StatusBadUserAccessDenied) {
-		t.Fatalf("got %v, want BadUserAccessDenied", err)
+	for _, p := range []string{uasc.SecurityPolicyNone, uasc.SecurityPolicyBasic256Sha256, uasc.SecurityPolicyEccNistP384} {
+		_, err := client.Dial(ctx(t), ts.url, client.Config{
+			SecurityPolicy: p, Identity: client.UserName("user1", "wrong"), AutoAcceptUntrustedCertificates: true,
+		})
+		if !errors.Is(err, ua.StatusBadUserAccessDenied) {
+			t.Fatalf("%s: got %v, want BadUserAccessDenied", p, err)
+		}
 	}
 }
 

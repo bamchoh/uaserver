@@ -58,9 +58,9 @@ func (u userName) token(c *Client, serverNonce []byte) (ua.ExtensionObject, ua.S
 		return ua.NewExtensionObject(tok), ua.SignatureData{}, nil
 	}
 	if sp.IsECC() {
-		return ua.ExtensionObject{}, ua.SignatureData{}, fmt.Errorf("client: encrypting passwords with %s is not supported", sp.Name)
+		return u.eccToken(c, tok, sp, serverNonce)
 	}
-	cert, err := x509.ParseCertificate(leaf(c.serverCert))
+	cert, err := x509.ParseCertificate(leaf(c.currentServerCert()))
 	if err != nil {
 		return ua.ExtensionObject{}, ua.SignatureData{}, fmt.Errorf("client: the server has no certificate to encrypt the password with")
 	}
@@ -78,6 +78,35 @@ func (u userName) token(c *Client, serverNonce []byte) (ua.ExtensionObject, ua.S
 	}
 	tok.Password = enc
 	tok.EncryptionAlgorithm = sp.AsymEncryptionAlgorithm
+	return ua.NewExtensionObject(tok), ua.SignatureData{}, nil
+}
+
+// eccToken encrypts the password as an EccEncryptedSecret for the server's
+// ephemeral key (Part 4, 7.41.2.3).
+func (u userName) eccToken(c *Client, tok *ua.UserNameIdentityToken, sp *uasc.SecurityPolicy, serverNonce []byte) (ua.ExtensionObject, ua.SignatureData, error) {
+	c.mu.Lock()
+	key := c.eccKey
+	c.mu.Unlock()
+	if key == nil {
+		return ua.ExtensionObject{}, ua.SignatureData{}, fmt.Errorf("client: the server sent no ephemeral key to encrypt the password: %w",
+			ua.StatusBadIdentityTokenInvalid)
+	}
+	// The secret is signed with an ECC application certificate. On a secure
+	// channel with that certificate the server already knows it.
+	cred := c.local
+	omit := c.endpoint.SecurityMode != ua.MessageSecurityModeNone
+	if cred == nil || !sp.CertificateKeyAllowed(cred.PrivateKey.Public()) {
+		var err error
+		if cred, err = c.applicationCredential(sp); err != nil {
+			return ua.ExtensionObject{}, ua.SignatureData{}, err
+		}
+		omit = false
+	}
+	enc, err := sp.EncryptSecretECC(cred, omit, key, serverNonce, []byte(u.password))
+	if err != nil {
+		return ua.ExtensionObject{}, ua.SignatureData{}, fmt.Errorf("client: encrypting the password: %w", err)
+	}
+	tok.Password = enc
 	return ua.NewExtensionObject(tok), ua.SignatureData{}, nil
 }
 
@@ -101,7 +130,7 @@ func (x x509Identity) token(c *Client, serverNonce []byte) (ua.ExtensionObject, 
 	if !sp.CertificateKeyAllowed(x.key.Public()) {
 		return ua.ExtensionObject{}, ua.SignatureData{}, fmt.Errorf("client: the user certificate key cannot be used with %s", sp.Name)
 	}
-	data := append(append([]byte{}, leaf(c.serverCert)...), serverNonce...)
+	data := append(append([]byte{}, leaf(c.currentServerCert())...), serverNonce...)
 	sig, err := sp.AsymSign(x.key, data)
 	if err != nil {
 		return ua.ExtensionObject{}, ua.SignatureData{}, fmt.Errorf("client: signing the user token: %w", err)
@@ -126,5 +155,11 @@ func (c *Client) tokenSecurity(p *ua.UserTokenPolicy) *uasc.SecurityPolicy {
 	if p.SecurityPolicyUri != "" {
 		return uasc.PolicyByURI(p.SecurityPolicyUri)
 	}
-	return c.ch.SecurityPolicy()
+	return c.policy
+}
+
+func (c *Client) currentServerCert() []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.serverCert
 }
