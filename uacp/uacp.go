@@ -73,6 +73,8 @@ type Conn struct {
 	PeerMaxMessage    uint32 // max size of a message the peer accepts (0 = no limit)
 	PeerMaxChunks     uint32 // max chunks the peer accepts (0 = no limit)
 	EndpointURL       string
+
+	client bool // the client side never sends ERR messages
 }
 
 // ServerLimits are the limits a server offers during the handshake.
@@ -173,8 +175,12 @@ func (c *Conn) ReadChunk() (*Chunk, error) {
 	return ch, nil
 }
 
-// SendError sends an ERR message. Errors while sending are ignored.
+// SendError sends an ERR message. Errors while sending are ignored. On the
+// client side it does nothing: only servers send ERR messages.
 func (c *Conn) SendError(code ua.StatusCode, reason string) {
+	if c.client {
+		return
+	}
 	e := ua.NewEncoder(64)
 	e.WriteRaw([]byte("ERRF"))
 	e.WriteUint32(0)

@@ -7849,6 +7849,9 @@ func (*ServiceFault) DataTypeID() NodeId { return NewNumericNodeId(0, 395) }
 // BinaryEncodingID returns the NodeId of the ServiceFault DefaultBinary encoding.
 func (*ServiceFault) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 397) }
 
+// Header returns the ResponseHeader.
+func (v *ServiceFault) Header() *ResponseHeader { return &v.ResponseHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *ServiceFault) Encode(e *Encoder) {
 	e.WriteStruct(&v.ResponseHeader)
@@ -7983,6 +7986,9 @@ func (*FindServersRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 420)
 // BinaryEncodingID returns the NodeId of the FindServersRequest DefaultBinary encoding.
 func (*FindServersRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 422) }
 
+// Header returns the RequestHeader.
+func (v *FindServersRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *FindServersRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8030,6 +8036,9 @@ func (*FindServersResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 423
 
 // BinaryEncodingID returns the NodeId of the FindServersResponse DefaultBinary encoding.
 func (*FindServersResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 425) }
+
+// Header returns the ResponseHeader.
+func (v *FindServersResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *FindServersResponse) Encode(e *Encoder) {
@@ -8107,6 +8116,9 @@ func (*FindServersOnNetworkRequest) DataTypeID() NodeId { return NewNumericNodeI
 // BinaryEncodingID returns the NodeId of the FindServersOnNetworkRequest DefaultBinary encoding.
 func (*FindServersOnNetworkRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 12208) }
 
+// Header returns the RequestHeader.
+func (v *FindServersOnNetworkRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *FindServersOnNetworkRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8145,6 +8157,9 @@ func (*FindServersOnNetworkResponse) DataTypeID() NodeId { return NewNumericNode
 
 // BinaryEncodingID returns the NodeId of the FindServersOnNetworkResponse DefaultBinary encoding.
 func (*FindServersOnNetworkResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 12209) }
+
+// Header returns the ResponseHeader.
+func (v *FindServersOnNetworkResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *FindServersOnNetworkResponse) Encode(e *Encoder) {
@@ -8269,6 +8284,9 @@ func (*GetEndpointsRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 426
 // BinaryEncodingID returns the NodeId of the GetEndpointsRequest DefaultBinary encoding.
 func (*GetEndpointsRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 428) }
 
+// Header returns the RequestHeader.
+func (v *GetEndpointsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *GetEndpointsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8316,6 +8334,9 @@ func (*GetEndpointsResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 42
 
 // BinaryEncodingID returns the NodeId of the GetEndpointsResponse DefaultBinary encoding.
 func (*GetEndpointsResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 431) }
+
+// Header returns the ResponseHeader.
+func (v *GetEndpointsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *GetEndpointsResponse) Encode(e *Encoder) {
@@ -8413,6 +8434,9 @@ func (*RegisterServerRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 4
 // BinaryEncodingID returns the NodeId of the RegisterServerRequest DefaultBinary encoding.
 func (*RegisterServerRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 437) }
 
+// Header returns the RequestHeader.
+func (v *RegisterServerRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *RegisterServerRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8435,6 +8459,9 @@ func (*RegisterServerResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 
 
 // BinaryEncodingID returns the NodeId of the RegisterServerResponse DefaultBinary encoding.
 func (*RegisterServerResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 440) }
+
+// Header returns the ResponseHeader.
+func (v *RegisterServerResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *RegisterServerResponse) Encode(e *Encoder) {
@@ -8511,6 +8538,9 @@ func (*RegisterServer2Request) DataTypeID() NodeId { return NewNumericNodeId(0, 
 // BinaryEncodingID returns the NodeId of the RegisterServer2Request DefaultBinary encoding.
 func (*RegisterServer2Request) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 12211) }
 
+// Header returns the RequestHeader.
+func (v *RegisterServer2Request) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *RegisterServer2Request) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8547,6 +8577,9 @@ func (*RegisterServer2Response) DataTypeID() NodeId { return NewNumericNodeId(0,
 
 // BinaryEncodingID returns the NodeId of the RegisterServer2Response DefaultBinary encoding.
 func (*RegisterServer2Response) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 12212) }
+
+// Header returns the ResponseHeader.
+func (v *RegisterServer2Response) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *RegisterServer2Response) Encode(e *Encoder) {
@@ -8628,6 +8661,9 @@ func (*OpenSecureChannelRequest) DataTypeID() NodeId { return NewNumericNodeId(0
 // BinaryEncodingID returns the NodeId of the OpenSecureChannelRequest DefaultBinary encoding.
 func (*OpenSecureChannelRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 446) }
 
+// Header returns the RequestHeader.
+func (v *OpenSecureChannelRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *OpenSecureChannelRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8662,6 +8698,9 @@ func (*OpenSecureChannelResponse) DataTypeID() NodeId { return NewNumericNodeId(
 // BinaryEncodingID returns the NodeId of the OpenSecureChannelResponse DefaultBinary encoding.
 func (*OpenSecureChannelResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 449) }
 
+// Header returns the ResponseHeader.
+func (v *OpenSecureChannelResponse) Header() *ResponseHeader { return &v.ResponseHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *OpenSecureChannelResponse) Encode(e *Encoder) {
 	e.WriteStruct(&v.ResponseHeader)
@@ -8689,6 +8728,9 @@ func (*CloseSecureChannelRequest) DataTypeID() NodeId { return NewNumericNodeId(
 // BinaryEncodingID returns the NodeId of the CloseSecureChannelRequest DefaultBinary encoding.
 func (*CloseSecureChannelRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 452) }
 
+// Header returns the RequestHeader.
+func (v *CloseSecureChannelRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CloseSecureChannelRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8709,6 +8751,9 @@ func (*CloseSecureChannelResponse) DataTypeID() NodeId { return NewNumericNodeId
 
 // BinaryEncodingID returns the NodeId of the CloseSecureChannelResponse DefaultBinary encoding.
 func (*CloseSecureChannelResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 455) }
+
+// Header returns the ResponseHeader.
+func (v *CloseSecureChannelResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *CloseSecureChannelResponse) Encode(e *Encoder) {
@@ -8787,6 +8832,9 @@ func (*CreateSessionRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 45
 // BinaryEncodingID returns the NodeId of the CreateSessionRequest DefaultBinary encoding.
 func (*CreateSessionRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 461) }
 
+// Header returns the RequestHeader.
+func (v *CreateSessionRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CreateSessionRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -8832,6 +8880,9 @@ func (*CreateSessionResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 4
 
 // BinaryEncodingID returns the NodeId of the CreateSessionResponse DefaultBinary encoding.
 func (*CreateSessionResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 464) }
+
+// Header returns the ResponseHeader.
+func (v *CreateSessionResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *CreateSessionResponse) Encode(e *Encoder) {
@@ -9020,6 +9071,9 @@ func (*ActivateSessionRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 
 // BinaryEncodingID returns the NodeId of the ActivateSessionRequest DefaultBinary encoding.
 func (*ActivateSessionRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 467) }
 
+// Header returns the RequestHeader.
+func (v *ActivateSessionRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *ActivateSessionRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -9074,6 +9128,9 @@ func (*ActivateSessionResponse) DataTypeID() NodeId { return NewNumericNodeId(0,
 // BinaryEncodingID returns the NodeId of the ActivateSessionResponse DefaultBinary encoding.
 func (*ActivateSessionResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 470) }
 
+// Header returns the ResponseHeader.
+func (v *ActivateSessionResponse) Header() *ResponseHeader { return &v.ResponseHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *ActivateSessionResponse) Encode(e *Encoder) {
 	e.WriteStruct(&v.ResponseHeader)
@@ -9122,6 +9179,9 @@ func (*CloseSessionRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 471
 // BinaryEncodingID returns the NodeId of the CloseSessionRequest DefaultBinary encoding.
 func (*CloseSessionRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 473) }
 
+// Header returns the RequestHeader.
+func (v *CloseSessionRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CloseSessionRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -9145,6 +9205,9 @@ func (*CloseSessionResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 47
 // BinaryEncodingID returns the NodeId of the CloseSessionResponse DefaultBinary encoding.
 func (*CloseSessionResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 476) }
 
+// Header returns the ResponseHeader.
+func (v *CloseSessionResponse) Header() *ResponseHeader { return &v.ResponseHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CloseSessionResponse) Encode(e *Encoder) {
 	e.WriteStruct(&v.ResponseHeader)
@@ -9166,6 +9229,9 @@ func (*CancelRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 477) }
 
 // BinaryEncodingID returns the NodeId of the CancelRequest DefaultBinary encoding.
 func (*CancelRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 479) }
+
+// Header returns the RequestHeader.
+func (v *CancelRequest) Header() *RequestHeader { return &v.RequestHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *CancelRequest) Encode(e *Encoder) {
@@ -9190,6 +9256,9 @@ func (*CancelResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 480) }
 
 // BinaryEncodingID returns the NodeId of the CancelResponse DefaultBinary encoding.
 func (*CancelResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 482) }
+
+// Header returns the ResponseHeader.
+func (v *CancelResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *CancelResponse) Encode(e *Encoder) {
@@ -9734,6 +9803,9 @@ func (*AddNodesRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 486) }
 // BinaryEncodingID returns the NodeId of the AddNodesRequest DefaultBinary encoding.
 func (*AddNodesRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 488) }
 
+// Header returns the RequestHeader.
+func (v *AddNodesRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *AddNodesRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -9768,6 +9840,9 @@ func (*AddNodesResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 489) }
 
 // BinaryEncodingID returns the NodeId of the AddNodesResponse DefaultBinary encoding.
 func (*AddNodesResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 491) }
+
+// Header returns the ResponseHeader.
+func (v *AddNodesResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *AddNodesResponse) Encode(e *Encoder) {
@@ -9851,6 +9926,9 @@ func (*AddReferencesRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 49
 // BinaryEncodingID returns the NodeId of the AddReferencesRequest DefaultBinary encoding.
 func (*AddReferencesRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 494) }
 
+// Header returns the RequestHeader.
+func (v *AddReferencesRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *AddReferencesRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -9885,6 +9963,9 @@ func (*AddReferencesResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 4
 
 // BinaryEncodingID returns the NodeId of the AddReferencesResponse DefaultBinary encoding.
 func (*AddReferencesResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 497) }
+
+// Header returns the ResponseHeader.
+func (v *AddReferencesResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *AddReferencesResponse) Encode(e *Encoder) {
@@ -9956,6 +10037,9 @@ func (*DeleteNodesRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 498)
 // BinaryEncodingID returns the NodeId of the DeleteNodesRequest DefaultBinary encoding.
 func (*DeleteNodesRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 500) }
 
+// Header returns the RequestHeader.
+func (v *DeleteNodesRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteNodesRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -9990,6 +10074,9 @@ func (*DeleteNodesResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 501
 
 // BinaryEncodingID returns the NodeId of the DeleteNodesResponse DefaultBinary encoding.
 func (*DeleteNodesResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 503) }
+
+// Header returns the ResponseHeader.
+func (v *DeleteNodesResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteNodesResponse) Encode(e *Encoder) {
@@ -10070,6 +10157,9 @@ func (*DeleteReferencesRequest) DataTypeID() NodeId { return NewNumericNodeId(0,
 // BinaryEncodingID returns the NodeId of the DeleteReferencesRequest DefaultBinary encoding.
 func (*DeleteReferencesRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 506) }
 
+// Header returns the RequestHeader.
+func (v *DeleteReferencesRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteReferencesRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -10104,6 +10194,9 @@ func (*DeleteReferencesResponse) DataTypeID() NodeId { return NewNumericNodeId(0
 
 // BinaryEncodingID returns the NodeId of the DeleteReferencesResponse DefaultBinary encoding.
 func (*DeleteReferencesResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 509) }
+
+// Header returns the ResponseHeader.
+func (v *DeleteReferencesResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteReferencesResponse) Encode(e *Encoder) {
@@ -10292,6 +10385,9 @@ func (*BrowseRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 525) }
 // BinaryEncodingID returns the NodeId of the BrowseRequest DefaultBinary encoding.
 func (*BrowseRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 527) }
 
+// Header returns the RequestHeader.
+func (v *BrowseRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *BrowseRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -10330,6 +10426,9 @@ func (*BrowseResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 528) }
 
 // BinaryEncodingID returns the NodeId of the BrowseResponse DefaultBinary encoding.
 func (*BrowseResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 530) }
+
+// Header returns the ResponseHeader.
+func (v *BrowseResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *BrowseResponse) Encode(e *Encoder) {
@@ -10378,6 +10477,9 @@ func (*BrowseNextRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 531) 
 // BinaryEncodingID returns the NodeId of the BrowseNextRequest DefaultBinary encoding.
 func (*BrowseNextRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 533) }
 
+// Header returns the RequestHeader.
+func (v *BrowseNextRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *BrowseNextRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -10414,6 +10516,9 @@ func (*BrowseNextResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 534)
 
 // BinaryEncodingID returns the NodeId of the BrowseNextResponse DefaultBinary encoding.
 func (*BrowseNextResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 536) }
+
+// Header returns the ResponseHeader.
+func (v *BrowseNextResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *BrowseNextResponse) Encode(e *Encoder) {
@@ -10606,6 +10711,9 @@ func (*TranslateBrowsePathsToNodeIdsRequest) BinaryEncodingID() NodeId {
 	return NewNumericNodeId(0, 554)
 }
 
+// Header returns the RequestHeader.
+func (v *TranslateBrowsePathsToNodeIdsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *TranslateBrowsePathsToNodeIdsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -10642,6 +10750,9 @@ func (*TranslateBrowsePathsToNodeIdsResponse) DataTypeID() NodeId { return NewNu
 func (*TranslateBrowsePathsToNodeIdsResponse) BinaryEncodingID() NodeId {
 	return NewNumericNodeId(0, 557)
 }
+
+// Header returns the ResponseHeader.
+func (v *TranslateBrowsePathsToNodeIdsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *TranslateBrowsePathsToNodeIdsResponse) Encode(e *Encoder) {
@@ -10689,6 +10800,9 @@ func (*RegisterNodesRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 55
 // BinaryEncodingID returns the NodeId of the RegisterNodesRequest DefaultBinary encoding.
 func (*RegisterNodesRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 560) }
 
+// Header returns the RequestHeader.
+func (v *RegisterNodesRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *RegisterNodesRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -10722,6 +10836,9 @@ func (*RegisterNodesResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 5
 
 // BinaryEncodingID returns the NodeId of the RegisterNodesResponse DefaultBinary encoding.
 func (*RegisterNodesResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 563) }
+
+// Header returns the ResponseHeader.
+func (v *RegisterNodesResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *RegisterNodesResponse) Encode(e *Encoder) {
@@ -10757,6 +10874,9 @@ func (*UnregisterNodesRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 
 // BinaryEncodingID returns the NodeId of the UnregisterNodesRequest DefaultBinary encoding.
 func (*UnregisterNodesRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 566) }
 
+// Header returns the RequestHeader.
+func (v *UnregisterNodesRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *UnregisterNodesRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -10789,6 +10909,9 @@ func (*UnregisterNodesResponse) DataTypeID() NodeId { return NewNumericNodeId(0,
 
 // BinaryEncodingID returns the NodeId of the UnregisterNodesResponse DefaultBinary encoding.
 func (*UnregisterNodesResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 569) }
+
+// Header returns the ResponseHeader.
+func (v *UnregisterNodesResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *UnregisterNodesResponse) Encode(e *Encoder) {
@@ -11338,6 +11461,9 @@ func (*QueryFirstRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 613) 
 // BinaryEncodingID returns the NodeId of the QueryFirstRequest DefaultBinary encoding.
 func (*QueryFirstRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 615) }
 
+// Header returns the RequestHeader.
+func (v *QueryFirstRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *QueryFirstRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -11383,6 +11509,9 @@ func (*QueryFirstResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 616)
 
 // BinaryEncodingID returns the NodeId of the QueryFirstResponse DefaultBinary encoding.
 func (*QueryFirstResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 618) }
+
+// Header returns the ResponseHeader.
+func (v *QueryFirstResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *QueryFirstResponse) Encode(e *Encoder) {
@@ -11447,6 +11576,9 @@ func (*QueryNextRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 619) }
 // BinaryEncodingID returns the NodeId of the QueryNextRequest DefaultBinary encoding.
 func (*QueryNextRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 621) }
 
+// Header returns the RequestHeader.
+func (v *QueryNextRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *QueryNextRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -11473,6 +11605,9 @@ func (*QueryNextResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 622) 
 
 // BinaryEncodingID returns the NodeId of the QueryNextResponse DefaultBinary encoding.
 func (*QueryNextResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 624) }
+
+// Header returns the ResponseHeader.
+func (v *QueryNextResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *QueryNextResponse) Encode(e *Encoder) {
@@ -11542,6 +11677,9 @@ func (*ReadRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 629) }
 // BinaryEncodingID returns the NodeId of the ReadRequest DefaultBinary encoding.
 func (*ReadRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 631) }
 
+// Header returns the RequestHeader.
+func (v *ReadRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *ReadRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -11580,6 +11718,9 @@ func (*ReadResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 632) }
 
 // BinaryEncodingID returns the NodeId of the ReadResponse DefaultBinary encoding.
 func (*ReadResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 634) }
+
+// Header returns the ResponseHeader.
+func (v *ReadResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *ReadResponse) Encode(e *Encoder) {
@@ -12153,6 +12294,9 @@ func (*HistoryReadRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 662)
 // BinaryEncodingID returns the NodeId of the HistoryReadRequest DefaultBinary encoding.
 func (*HistoryReadRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 664) }
 
+// Header returns the RequestHeader.
+func (v *HistoryReadRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *HistoryReadRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -12193,6 +12337,9 @@ func (*HistoryReadResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 665
 
 // BinaryEncodingID returns the NodeId of the HistoryReadResponse DefaultBinary encoding.
 func (*HistoryReadResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 667) }
+
+// Header returns the ResponseHeader.
+func (v *HistoryReadResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *HistoryReadResponse) Encode(e *Encoder) {
@@ -12270,6 +12417,9 @@ func (*WriteRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 671) }
 // BinaryEncodingID returns the NodeId of the WriteRequest DefaultBinary encoding.
 func (*WriteRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 673) }
 
+// Header returns the RequestHeader.
+func (v *WriteRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *WriteRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -12304,6 +12454,9 @@ func (*WriteResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 674) }
 
 // BinaryEncodingID returns the NodeId of the WriteResponse DefaultBinary encoding.
 func (*WriteResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 676) }
+
+// Header returns the ResponseHeader.
+func (v *WriteResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *WriteResponse) Encode(e *Encoder) {
@@ -12628,6 +12781,9 @@ func (*HistoryUpdateRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 69
 // BinaryEncodingID returns the NodeId of the HistoryUpdateRequest DefaultBinary encoding.
 func (*HistoryUpdateRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 700) }
 
+// Header returns the RequestHeader.
+func (v *HistoryUpdateRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *HistoryUpdateRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -12662,6 +12818,9 @@ func (*HistoryUpdateResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 7
 
 // BinaryEncodingID returns the NodeId of the HistoryUpdateResponse DefaultBinary encoding.
 func (*HistoryUpdateResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 703) }
+
+// Header returns the ResponseHeader.
+func (v *HistoryUpdateResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *HistoryUpdateResponse) Encode(e *Encoder) {
@@ -12806,6 +12965,9 @@ func (*CallRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 710) }
 // BinaryEncodingID returns the NodeId of the CallRequest DefaultBinary encoding.
 func (*CallRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 712) }
 
+// Header returns the RequestHeader.
+func (v *CallRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CallRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -12840,6 +13002,9 @@ func (*CallResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 713) }
 
 // BinaryEncodingID returns the NodeId of the CallResponse DefaultBinary encoding.
 func (*CallResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 715) }
+
+// Header returns the ResponseHeader.
+func (v *CallResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *CallResponse) Encode(e *Encoder) {
@@ -13216,6 +13381,9 @@ func (*CreateMonitoredItemsRequest) DataTypeID() NodeId { return NewNumericNodeI
 // BinaryEncodingID returns the NodeId of the CreateMonitoredItemsRequest DefaultBinary encoding.
 func (*CreateMonitoredItemsRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 751) }
 
+// Header returns the RequestHeader.
+func (v *CreateMonitoredItemsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CreateMonitoredItemsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -13254,6 +13422,9 @@ func (*CreateMonitoredItemsResponse) DataTypeID() NodeId { return NewNumericNode
 
 // BinaryEncodingID returns the NodeId of the CreateMonitoredItemsResponse DefaultBinary encoding.
 func (*CreateMonitoredItemsResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 754) }
+
+// Header returns the ResponseHeader.
+func (v *CreateMonitoredItemsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *CreateMonitoredItemsResponse) Encode(e *Encoder) {
@@ -13357,6 +13528,9 @@ func (*ModifyMonitoredItemsRequest) DataTypeID() NodeId { return NewNumericNodeI
 // BinaryEncodingID returns the NodeId of the ModifyMonitoredItemsRequest DefaultBinary encoding.
 func (*ModifyMonitoredItemsRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 763) }
 
+// Header returns the RequestHeader.
+func (v *ModifyMonitoredItemsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *ModifyMonitoredItemsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -13395,6 +13569,9 @@ func (*ModifyMonitoredItemsResponse) DataTypeID() NodeId { return NewNumericNode
 
 // BinaryEncodingID returns the NodeId of the ModifyMonitoredItemsResponse DefaultBinary encoding.
 func (*ModifyMonitoredItemsResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 766) }
+
+// Header returns the ResponseHeader.
+func (v *ModifyMonitoredItemsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *ModifyMonitoredItemsResponse) Encode(e *Encoder) {
@@ -13444,6 +13621,9 @@ func (*SetMonitoringModeRequest) DataTypeID() NodeId { return NewNumericNodeId(0
 // BinaryEncodingID returns the NodeId of the SetMonitoringModeRequest DefaultBinary encoding.
 func (*SetMonitoringModeRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 769) }
 
+// Header returns the RequestHeader.
+func (v *SetMonitoringModeRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *SetMonitoringModeRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -13482,6 +13662,9 @@ func (*SetMonitoringModeResponse) DataTypeID() NodeId { return NewNumericNodeId(
 
 // BinaryEncodingID returns the NodeId of the SetMonitoringModeResponse DefaultBinary encoding.
 func (*SetMonitoringModeResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 772) }
+
+// Header returns the ResponseHeader.
+func (v *SetMonitoringModeResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *SetMonitoringModeResponse) Encode(e *Encoder) {
@@ -13531,6 +13714,9 @@ func (*SetTriggeringRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 77
 
 // BinaryEncodingID returns the NodeId of the SetTriggeringRequest DefaultBinary encoding.
 func (*SetTriggeringRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 775) }
+
+// Header returns the RequestHeader.
+func (v *SetTriggeringRequest) Header() *RequestHeader { return &v.RequestHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *SetTriggeringRequest) Encode(e *Encoder) {
@@ -13584,6 +13770,9 @@ func (*SetTriggeringResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 7
 
 // BinaryEncodingID returns the NodeId of the SetTriggeringResponse DefaultBinary encoding.
 func (*SetTriggeringResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 778) }
+
+// Header returns the ResponseHeader.
+func (v *SetTriggeringResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *SetTriggeringResponse) Encode(e *Encoder) {
@@ -13656,6 +13845,9 @@ func (*DeleteMonitoredItemsRequest) DataTypeID() NodeId { return NewNumericNodeI
 // BinaryEncodingID returns the NodeId of the DeleteMonitoredItemsRequest DefaultBinary encoding.
 func (*DeleteMonitoredItemsRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 781) }
 
+// Header returns the RequestHeader.
+func (v *DeleteMonitoredItemsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteMonitoredItemsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -13692,6 +13884,9 @@ func (*DeleteMonitoredItemsResponse) DataTypeID() NodeId { return NewNumericNode
 
 // BinaryEncodingID returns the NodeId of the DeleteMonitoredItemsResponse DefaultBinary encoding.
 func (*DeleteMonitoredItemsResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 784) }
+
+// Header returns the ResponseHeader.
+func (v *DeleteMonitoredItemsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteMonitoredItemsResponse) Encode(e *Encoder) {
@@ -13744,6 +13939,9 @@ func (*CreateSubscriptionRequest) DataTypeID() NodeId { return NewNumericNodeId(
 // BinaryEncodingID returns the NodeId of the CreateSubscriptionRequest DefaultBinary encoding.
 func (*CreateSubscriptionRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 787) }
 
+// Header returns the RequestHeader.
+func (v *CreateSubscriptionRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CreateSubscriptionRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -13781,6 +13979,9 @@ func (*CreateSubscriptionResponse) DataTypeID() NodeId { return NewNumericNodeId
 // BinaryEncodingID returns the NodeId of the CreateSubscriptionResponse DefaultBinary encoding.
 func (*CreateSubscriptionResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 790) }
 
+// Header returns the ResponseHeader.
+func (v *CreateSubscriptionResponse) Header() *ResponseHeader { return &v.ResponseHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *CreateSubscriptionResponse) Encode(e *Encoder) {
 	e.WriteStruct(&v.ResponseHeader)
@@ -13815,6 +14016,9 @@ func (*ModifySubscriptionRequest) DataTypeID() NodeId { return NewNumericNodeId(
 
 // BinaryEncodingID returns the NodeId of the ModifySubscriptionRequest DefaultBinary encoding.
 func (*ModifySubscriptionRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 793) }
+
+// Header returns the RequestHeader.
+func (v *ModifySubscriptionRequest) Header() *RequestHeader { return &v.RequestHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *ModifySubscriptionRequest) Encode(e *Encoder) {
@@ -13852,6 +14056,9 @@ func (*ModifySubscriptionResponse) DataTypeID() NodeId { return NewNumericNodeId
 // BinaryEncodingID returns the NodeId of the ModifySubscriptionResponse DefaultBinary encoding.
 func (*ModifySubscriptionResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 796) }
 
+// Header returns the ResponseHeader.
+func (v *ModifySubscriptionResponse) Header() *ResponseHeader { return &v.ResponseHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *ModifySubscriptionResponse) Encode(e *Encoder) {
 	e.WriteStruct(&v.ResponseHeader)
@@ -13880,6 +14087,9 @@ func (*SetPublishingModeRequest) DataTypeID() NodeId { return NewNumericNodeId(0
 
 // BinaryEncodingID returns the NodeId of the SetPublishingModeRequest DefaultBinary encoding.
 func (*SetPublishingModeRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 799) }
+
+// Header returns the RequestHeader.
+func (v *SetPublishingModeRequest) Header() *RequestHeader { return &v.RequestHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *SetPublishingModeRequest) Encode(e *Encoder) {
@@ -13917,6 +14127,9 @@ func (*SetPublishingModeResponse) DataTypeID() NodeId { return NewNumericNodeId(
 
 // BinaryEncodingID returns the NodeId of the SetPublishingModeResponse DefaultBinary encoding.
 func (*SetPublishingModeResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 802) }
+
+// Header returns the ResponseHeader.
+func (v *SetPublishingModeResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *SetPublishingModeResponse) Encode(e *Encoder) {
@@ -14231,6 +14444,9 @@ func (*PublishRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 824) }
 // BinaryEncodingID returns the NodeId of the PublishRequest DefaultBinary encoding.
 func (*PublishRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 826) }
 
+// Header returns the RequestHeader.
+func (v *PublishRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *PublishRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -14269,6 +14485,9 @@ func (*PublishResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 827) }
 
 // BinaryEncodingID returns the NodeId of the PublishResponse DefaultBinary encoding.
 func (*PublishResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 829) }
+
+// Header returns the ResponseHeader.
+func (v *PublishResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *PublishResponse) Encode(e *Encoder) {
@@ -14335,6 +14554,9 @@ func (*RepublishRequest) DataTypeID() NodeId { return NewNumericNodeId(0, 830) }
 // BinaryEncodingID returns the NodeId of the RepublishRequest DefaultBinary encoding.
 func (*RepublishRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 832) }
 
+// Header returns the RequestHeader.
+func (v *RepublishRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *RepublishRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -14360,6 +14582,9 @@ func (*RepublishResponse) DataTypeID() NodeId { return NewNumericNodeId(0, 833) 
 
 // BinaryEncodingID returns the NodeId of the RepublishResponse DefaultBinary encoding.
 func (*RepublishResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 835) }
+
+// Header returns the ResponseHeader.
+func (v *RepublishResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *RepublishResponse) Encode(e *Encoder) {
@@ -14420,6 +14645,9 @@ func (*TransferSubscriptionsRequest) DataTypeID() NodeId { return NewNumericNode
 // BinaryEncodingID returns the NodeId of the TransferSubscriptionsRequest DefaultBinary encoding.
 func (*TransferSubscriptionsRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 841) }
 
+// Header returns the RequestHeader.
+func (v *TransferSubscriptionsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *TransferSubscriptionsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -14456,6 +14684,9 @@ func (*TransferSubscriptionsResponse) DataTypeID() NodeId { return NewNumericNod
 
 // BinaryEncodingID returns the NodeId of the TransferSubscriptionsResponse DefaultBinary encoding.
 func (*TransferSubscriptionsResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 844) }
+
+// Header returns the ResponseHeader.
+func (v *TransferSubscriptionsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *TransferSubscriptionsResponse) Encode(e *Encoder) {
@@ -14503,6 +14734,9 @@ func (*DeleteSubscriptionsRequest) DataTypeID() NodeId { return NewNumericNodeId
 // BinaryEncodingID returns the NodeId of the DeleteSubscriptionsRequest DefaultBinary encoding.
 func (*DeleteSubscriptionsRequest) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 847) }
 
+// Header returns the RequestHeader.
+func (v *DeleteSubscriptionsRequest) Header() *RequestHeader { return &v.RequestHeader }
+
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteSubscriptionsRequest) Encode(e *Encoder) {
 	e.WriteStruct(&v.RequestHeader)
@@ -14537,6 +14771,9 @@ func (*DeleteSubscriptionsResponse) DataTypeID() NodeId { return NewNumericNodeI
 
 // BinaryEncodingID returns the NodeId of the DeleteSubscriptionsResponse DefaultBinary encoding.
 func (*DeleteSubscriptionsResponse) BinaryEncodingID() NodeId { return NewNumericNodeId(0, 850) }
+
+// Header returns the ResponseHeader.
+func (v *DeleteSubscriptionsResponse) Header() *ResponseHeader { return &v.ResponseHeader }
 
 // Encode writes the structure in UA Binary encoding.
 func (v *DeleteSubscriptionsResponse) Encode(e *Encoder) {

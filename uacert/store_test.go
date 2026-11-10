@@ -1,4 +1,4 @@
-package server
+package uacert
 
 import (
 	"crypto/rand"
@@ -39,7 +39,7 @@ func newUserCert(t *testing.T) *x509.Certificate {
 }
 
 func TestValidateUserCertificate(t *testing.T) {
-	store := &CertificateStore{Root: t.TempDir()}
+	store := &Store{Root: t.TempDir()}
 	cert := newUserCert(t)
 
 	// Unknown user certificates are rejected and stored in the rejected directory.

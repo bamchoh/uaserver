@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -491,16 +490,10 @@ func (s *Server) serveConn(c net.Conn) {
 }
 
 func requestHeaderOf(s ua.Structure) *ua.RequestHeader {
-	v := reflect.ValueOf(s)
-	if v.Kind() != reflect.Pointer {
-		return nil
+	if r, ok := s.(ua.Request); ok {
+		return r.Header()
 	}
-	f := v.Elem().FieldByName("RequestHeader")
-	if !f.IsValid() {
-		return nil
-	}
-	h, _ := f.Addr().Interface().(*ua.RequestHeader)
-	return h
+	return nil
 }
 
 func respHeader(req *ua.RequestHeader, status ua.StatusCode) ua.ResponseHeader {

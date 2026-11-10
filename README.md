@@ -2,7 +2,8 @@
 
 English | [日本語](README.ja-JP.md)
 
-An OPC UA server library for Go, ported from the server side of [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard).
+An OPC UA server library for Go, ported from the server side of [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard),
+with a client that shares its encoding and security code.
 It has no dependencies beyond the Go standard library.
 
 ## Features
@@ -16,6 +17,7 @@ It has no dependencies beyond the Go standard library.
 | Certificates | Self-signed certificates created automatically (RSA and ECC P-256 / P-384), a `pki/{own,trusted,issuer,rejected}` store with the same layout as the .NET stack, CA chain validation |
 | User authentication | Anonymous, UserName (passwords are RSA encrypted, also on None endpoints), X509 certificates (ECC user certificates on ECC endpoints) |
 | Address space | The official `Opc.Ua.NodeSet2.xml` (namespace 0) is embedded and loaded; custom NodeSet2 files can be loaded with `LoadNodeSet` |
+| Client | The same security policies, modes and user authentication as the server; GetEndpoints, FindServers, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write, Call and subscriptions with monitored items; token renewal and session keep-alive; any other service through `Client.Send` |
 | Services | GetEndpoints, FindServers, CreateSession / ActivateSession / CloseSession, Browse / BrowseNext, TranslateBrowsePathsToNodeIds, Register/UnregisterNodes, Read, Write (with IndexRange and type checks), Call, all Subscription services (Create / Modify / SetPublishingMode / Publish / Republish / Transfer / Delete), all MonitoredItem services (data change notifications, absolute deadband) |
 
 ## Not supported
@@ -26,11 +28,12 @@ It has no dependencies beyond the Go standard library.
 - The AesGcm / ChaChaPoly variants of the ECC policies, brainpool, curve25519 / curve448, and the deprecated Basic128Rsa15 / Basic256
 - HTTPS / WebSocket transports, PubSub, GDS, reverse connect
 - CRL (certificate revocation list) checks
+- Client: reconnecting and transferring the session after a lost connection, and encrypting passwords for ECC endpoints
 
 ## Comparison with gopcua
 
 [gopcua/opcua](https://github.com/gopcua/opcua) is the most widely used OPC UA library for Go.
-gopcua focuses on the client and is used in many production environments; uaserver focuses on the server.
+gopcua focuses on the client and is used in many production environments; uaserver focuses on the server, and its client is new.
 
 The comparison below is based on reading the source of gopcua's main branch (commit `79fa869`, as of 2026-11-09),
 not on the table in gopcua's README (a service that only returns `BadServiceUnsupported` is marked "No").
@@ -43,32 +46,33 @@ gopcua is actively developed, so check gopcua itself for its current state.
 | | uaserver | gopcua |
 |---|---|---|
 | Main use | Server | Client (the server is in development) |
-| Client | No | Yes (widely used in production) |
+| Client | Yes (new, see [Client](#client)) | Yes (widely used in production) |
 | Dependencies | Go standard library only | google/uuid, golang.org/x/exp, golang.org/x/term and others |
 | Origin | Port of UA-.NETStandard | Independent implementation |
 | Standard address space (namespace 0) | Yes, official NodeSet2 embedded | Yes, official NodeSet2 embedded |
 | Loading custom NodeSet2 files | Yes | Yes |
-| Interoperability testing | Interop tests against the official .NET client run in CI | — |
+| Interoperability testing | Server: interop tests against the official .NET client run in CI. Client: checked by hand against the official .NET server (2.0.1) and the gopcua server | — |
 
-### Security (server)
+### Security
 
-| | uaserver | gopcua server | gopcua client |
-|---|---|---|---|
-| None | Yes | Yes | Yes |
-| Basic128Rsa15 (deprecated) | No | Partial, untested *1 | Yes |
-| Basic256 (deprecated) | No | Partial, untested *1 | Yes |
-| Basic256Sha256 | Yes | Partial, untested *1 | Yes |
-| Aes128_Sha256_RsaOaep | Yes | Partial, untested *1 | Yes |
-| Aes256_Sha256_RsaPss | Yes | Partial, untested *1 | Yes |
-| ECC_nistP256 / ECC_nistP384 | Yes | No | No |
-| Anonymous authentication | Yes | Yes | Yes |
-| UserName authentication | Yes, passwords are checked | Partial *2 | Yes |
-| X509 user authentication | Yes, signature and trust list are checked | Partial *2 | Yes |
-| Client certificate trust list (trusted / rejected) | Yes | No | — |
-| Self-signed certificate creation | Yes | No, the library takes a certificate and key (the examples contain generation code) | — |
+| | uaserver server | gopcua server | uaserver client | gopcua client |
+|---|---|---|---|---|
+| None | Yes | Yes | Yes | Yes |
+| Basic128Rsa15 (deprecated) | No | Partial, untested *1 | No | Yes |
+| Basic256 (deprecated) | No | Partial, untested *1 | No | Yes |
+| Basic256Sha256 | Yes | Partial, untested *1 | Yes | Yes |
+| Aes128_Sha256_RsaOaep | Yes | Partial, untested *1 | Yes | Yes |
+| Aes256_Sha256_RsaPss | Yes | Partial, untested *1 | Yes | Yes |
+| ECC_nistP256 / ECC_nistP384 | Yes | No | Yes | No |
+| Anonymous authentication | Yes | Yes | Yes | Yes |
+| UserName authentication | Yes, passwords are checked | Partial *2 | Yes (not on ECC endpoints) | Yes |
+| X509 user authentication | Yes, signature and trust list are checked | Partial *2 | Yes | Yes |
+| Peer certificate trust list (trusted / rejected) | Yes | No | Yes | No *3 |
+| Self-signed certificate creation | Yes | No, the library takes a certificate and key (the examples contain generation code) | Yes | No |
 
 *1 Marked "Untested" in gopcua's README.
 *2 The token types can be offered, but ActivateSession does not check user tokens (passwords or certificates).
+*3 The server certificate can be checked against a certificate pool given by the application.
 
 ### Services (server)
 
@@ -156,7 +160,8 @@ Results vary between machines and operating systems; use the ratios rather than 
 
 ### Which one to use
 
-- **To connect to OPC UA servers and read or write values** (a client): use gopcua. uaserver has no client.
+- **To connect to OPC UA servers and read or write values** (a client): gopcua is the proven choice and supports the deprecated policies.
+  uaserver's client is new; it adds the ECC policies, a trust list for server certificates, and notifications delivered in order.
 - **To build an OPC UA server in Go**: uaserver covers more, including authentication, certificate trust management, method calls and the full set of subscription services.
 - **To connect to old devices that only support the deprecated policies (Basic128Rsa15 / Basic256)**: uaserver does not support them.
 
@@ -224,14 +229,67 @@ as.SetValue(ua.NewStringNodeId(ns, "Temp"), ua.NewVariant(22.0)) // subscribed c
 
 `Node.OnRead` / `Node.OnWrite` customize how values are read and written, and `AddMethod` adds methods.
 
+## Client
+
+`cmd/opcuacli` is a small command line client:
+
+```sh
+go run ./cmd/opcuacli endpoints opc.tcp://localhost:4840
+go run ./cmd/opcuacli browse    opc.tcp://localhost:4840 "ns=2;s=Demo"
+go run ./cmd/opcuacli -policy Basic256Sha256 -user user1 -password password1 \
+    read opc.tcp://localhost:4840 "ns=2;s=Demo.Static.Int32"
+go run ./cmd/opcuacli write     opc.tcp://localhost:4840 "ns=2;s=Demo.Static.Int32" 42
+go run ./cmd/opcuacli subscribe opc.tcp://localhost:4840 "ns=2;s=Demo.Dynamic.Counter"
+```
+
+`-policy best` picks the most secure endpoint and `-mode Sign` selects signing only (the default is SignAndEncrypt).
+With a secure policy, the first connection fails and the server certificate is stored in `pki-client/rejected/certs`;
+move it to `pki-client/trusted/certs` to trust the server (or pass `-autoaccept` for testing).
+The client certificate is created in `pki-client/own`, and the server must trust it in the same way.
+
+### Using the client library
+
+```go
+c, err := client.Dial(ctx, "opc.tcp://localhost:4840", client.Config{
+    SecurityPolicy: uasc.SecurityPolicyBasic256Sha256, // default None
+    PKIDir:         "pki-client",                      // own certificate and trusted servers
+    Identity:       client.UserName("user1", "password1"),
+})
+if err != nil { ... }
+defer c.Close(ctx)
+
+id := ua.NewStringNodeId(2, "Demo.Static.Int32")
+dv, err := c.ReadValue(ctx, id)
+err = c.WriteValue(ctx, id, ua.NewVariant(int32(42)))
+refs, err := c.BrowseChildren(ctx, ua.NewNumericNodeId(0, uaid.ObjectsFolder))
+out, err := c.CallMethod(ctx, objectID, methodID, ua.NewVariant(1.0), ua.NewVariant(2.0))
+
+sub, err := c.CreateSubscription(ctx, client.SubscriptionParams{PublishingInterval: 100 * time.Millisecond})
+items, err := sub.MonitorValues(ctx, id)
+for n := range sub.Notifications() { // in sequence number order
+    for _, dc := range n.DataChanges {
+        fmt.Println(dc.ClientHandle, dc.Value.Value)
+    }
+}
+```
+
+- Errors wrap the OPC UA status code: `errors.Is(err, ua.StatusBadNodeIdUnknown)` works for service results, and for the result of the single operation in `ReadValue`, `WriteValue` and `CallMethod`.
+- `Read`, `Write`, `Browse`, `Call` and the other methods named after a service take the full request; `Client.Send` sends any request.
+- `client.X509(cert, key)` logs in with a user certificate. `GetEndpoints`, `SelectEndpoint` and `DialEndpoint` choose an endpoint explicitly.
+- Without `PKIDir` the client certificate is created in memory, and the server certificate must be accepted by `VerifyServerCertificate` or `AutoAcceptUntrustedCertificates`.
+- The session is kept alive while idle, and the security token is renewed before it expires.
+  When the connection is lost, `Done()` is closed, and each subscription's channel receives a notification with `Err` set and is then closed. The client does not reconnect.
+
 ## Package layout
 
 | Package | Counterpart in the .NET stack |
 |---|---|
 | `ua` | Built-in types of Opc.Ua.Core, BinaryEncoder/Decoder, generated types (`types_gen.go`, `id/ids_gen.go`, `status_gen.go`) |
-| `uacp` | TcpMessageSocket / Hello and Acknowledge handling |
-| `uasc` | UaSCBinaryChannel (channel, chunks, tokens) and SecurityPolicies |
-| `server` | Opc.Ua.Server (StandardServer, SessionManager, SubscriptionManager, MasterNodeManager, CertificateValidator) |
+| `uacp` | TcpMessageSocket / Hello and Acknowledge handling (server and client side) |
+| `uasc` | UaSCBinaryChannel (channel, chunks, tokens) and SecurityPolicies (server and client side) |
+| `uacert` | CertificateValidator, CertificateFactory and the directory certificate stores |
+| `server` | Opc.Ua.Server (StandardServer, SessionManager, SubscriptionManager, MasterNodeManager) |
+| `client` | Opc.Ua.Client (Session, Subscription), written for Go rather than ported |
 | `internal/gen` | Code generation from the schema files (`go generate ./ua`) |
 
 ## Testing
@@ -239,6 +297,9 @@ as.SetValue(ua.NewStringNodeId(ns, "Temp"), ua.NewVariant(22.0)) // subscribed c
 ```sh
 go test ./...
 ```
+
+The client tests connect the client to the server over TCP on every endpoint (each policy and mode) with anonymous, user name and X509 identities.
+They also cover browsing with continuation points, multi-chunk messages, subscriptions, token renewal, session keep-alive and certificate trust.
 
 Interoperability tests with the official .NET client (OPCFoundation.NetStandard.Opc.Ua.Client 2.0.1):
 

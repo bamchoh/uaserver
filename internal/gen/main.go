@@ -362,6 +362,13 @@ func genTypes(bsdPath string, ids []nodeIdEntry, path string) {
 		fmt.Fprintf(&b, "// BinaryEncodingID returns the NodeId of the %s DefaultBinary encoding.\n", name)
 		fmt.Fprintf(&b, "func (*%s) BinaryEncodingID() NodeId { return NewNumericNodeId(0, %d) }\n\n", gn, encID)
 
+		// Service requests and responses start with their header.
+		if len(fields) > 0 && !fields[0].array && fields[0].name == fields[0].goType &&
+			(fields[0].goType == "RequestHeader" || fields[0].goType == "ResponseHeader") {
+			fmt.Fprintf(&b, "// Header returns the %s.\nfunc (v *%s) Header() *%s { return &v.%s }\n\n",
+				fields[0].goType, gn, fields[0].goType, fields[0].name)
+		}
+
 		fmt.Fprintf(&b, "// Encode writes the structure in UA Binary encoding.\nfunc (v *%s) Encode(e *Encoder) {\n", gn)
 		for _, f := range fields {
 			target := "v." + f.name
