@@ -2,7 +2,7 @@
 // that the uastack module itself does not depend on gopcua.
 module github.com/bamchoh/uastack/bench
 
-go 1.25.6
+go 1.25.0
 
 replace github.com/bamchoh/uastack => ../
 

@@ -1,5 +1,7 @@
 # uastack
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/bamchoh/uastack.svg)](https://pkg.go.dev/github.com/bamchoh/uastack) [![CI](https://github.com/bamchoh/uastack/actions/workflows/ci.yml/badge.svg)](https://github.com/bamchoh/uastack/actions/workflows/ci.yml)
+
 English | [日本語](README.ja-JP.md)
 
 An OPC UA stack for Go with a server and a client. The server is ported from the server side of [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard);
@@ -349,3 +351,8 @@ go run ./tests/interop/goclient opc.tcp://localhost:48600   # from the repositor
 
 They connect to every endpoint (each policy and mode, including ECC) with anonymous, user name (including a wrong password) and X509 (RSA and ECC) identities,
 and read, browse, write and receive data change notifications on each. Both interop tests run in CI.
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
+Parts of uastack come from the OPC Foundation under the OPC Foundation MIT License; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
