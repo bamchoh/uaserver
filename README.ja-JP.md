@@ -1,5 +1,7 @@
 # uastack
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/bamchoh/uastack.svg)](https://pkg.go.dev/github.com/bamchoh/uastack) [![CI](https://github.com/bamchoh/uastack/actions/workflows/ci.yml/badge.svg)](https://github.com/bamchoh/uastack/actions/workflows/ci.yml)
+
 [English](README.md) | 日本語
 
 サーバーとクライアントを備えた Go の OPC UA スタックです。サーバーは [OPC UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard) のサーバー機能を移植したもので、
@@ -349,3 +351,8 @@ go run ./tests/interop/goclient opc.tcp://localhost:48600   # リポジトリの
 
 すべてのエンドポイント（各ポリシーとモード、ECC を含む）に、匿名・ユーザー名（パスワード誤りを含む）・X509（RSA と ECC）でつなぎ、
 それぞれで Read・Browse・Write とデータ変化通知を確認します。どちらの相互接続テストも CI で実行します。
+
+## ライセンス
+
+MIT ライセンスです。[LICENSE](LICENSE) を参照してください。
+一部は OPC Foundation の成果物（OPC Foundation MIT License）を含みます。[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
