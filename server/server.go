@@ -402,16 +402,27 @@ func (s *Server) ListenAndServe() error {
 	return s.Serve(ln)
 }
 
-// Serve accepts connections on ln.
+// Serve accepts connections on ln. It returns nil after Close, including
+// when Close was called before Serve; ln is closed in that case.
 func (s *Server) Serve(ln net.Listener) error {
+	// Register ln under the lock that Close holds while closing s.ln, so a
+	// Close that happens before or during this call always stops the loop.
 	s.mu.Lock()
+	select {
+	case <-s.closed:
+		s.mu.Unlock()
+		_ = ln.Close()
+		return nil
+	default:
+	}
 	s.ln = ln
+	// Add before Close can reach wg.Wait (it takes s.mu first).
+	s.wg.Add(1)
 	s.mu.Unlock()
 	s.logf("OPC UA server listening on %s (%s)", ln.Addr(), s.cfg.EndpointURL)
 	for _, ep := range s.endpoints {
 		s.logf("  endpoint: %s [%s, %s]", ep.EndpointUrl, uasc.PolicyByURI(ep.SecurityPolicyUri).Name, ep.SecurityMode)
 	}
-	s.wg.Add(1)
 	go s.sessions.run()
 	for {
 		c, err := ln.Accept()
