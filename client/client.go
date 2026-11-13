@@ -187,6 +187,9 @@ type Client struct {
 
 	closeOnce sync.Once
 	closed    chan struct{}
+	// sessionChanged wakes the keep-alive when a session was created, so
+	// that it uses the timeout of the new session.
+	sessionChanged chan struct{}
 }
 
 // Dial connects to the server at endpointURL: it reads the server's
@@ -239,7 +242,8 @@ func dial(ctx context.Context, endpointURL string, ep ua.EndpointDescription, cf
 		defer cancel()
 	}
 
-	c := &Client{cfg: cfg, url: endpointURL, endpoint: ep, policy: policy, closed: make(chan struct{}), endpointFromSession: fromSession}
+	c := &Client{cfg: cfg, url: endpointURL, endpoint: ep, policy: policy, closed: make(chan struct{}), endpointFromSession: fromSession,
+		sessionChanged: make(chan struct{}, 1)}
 	c.subs = newSubscriptions(c)
 	if !policy.IsNone() {
 		local, err := c.applicationCredential(policy)
@@ -560,23 +564,42 @@ func (c *Client) restoreSession(ctx context.Context) (*uasc.ClientChannel, bool,
 	return ch, true, nil
 }
 
+// keepAliveInterval returns how long the session may be idle before it is
+// kept alive: the configured interval, or a third of the session timeout
+// granted by the server.
+func (c *Client) keepAliveInterval() time.Duration {
+	interval := c.cfg.KeepAliveInterval
+	if interval == 0 {
+		interval = c.SessionTimeout() / 3
+	}
+	return max(interval, 100*time.Millisecond)
+}
+
 // keepAlive reads the server state when the session has been idle, so that
 // the session does not time out.
 func (c *Client) keepAlive() {
-	interval := c.cfg.KeepAliveInterval
-	if interval == 0 {
-		interval = c.sessionTimeout / 3
-	}
-	interval = max(interval, 100*time.Millisecond)
-	t := time.NewTicker(interval / 2)
+	t := time.NewTimer(c.keepAliveInterval() / 2)
 	defer t.Stop()
 	failures := 0
 	for {
 		select {
 		case <-c.closed:
 			return
+		case <-c.sessionChanged:
+			// The session was recreated after a reconnect and may have
+			// another timeout: wait again with the new interval.
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
+			t.Reset(c.keepAliveInterval() / 2)
+			continue
 		case <-t.C:
 		}
+		interval := c.keepAliveInterval()
+		t.Reset(interval / 2)
 		if time.Since(time.Unix(0, c.lastUse.Load())) < interval {
 			continue
 		}
@@ -829,6 +852,10 @@ func (c *Client) createSession(ctx context.Context, ch *uasc.ClientChannel) erro
 	c.sessionID = resp.SessionId
 	c.authToken = resp.AuthenticationToken
 	c.sessionTimeout = time.Duration(resp.RevisedSessionTimeout * float64(time.Millisecond))
+	select {
+	case c.sessionChanged <- struct{}{}:
+	default:
+	}
 	c.serverNonce = resp.ServerNonce
 	c.serverCert = resp.ServerCertificate
 	c.mu.Unlock()

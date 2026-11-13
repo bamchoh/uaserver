@@ -38,13 +38,13 @@ func newProxy(t *testing.T, targetURL string) (*proxy, string) {
 				return
 			}
 			p.mu.Lock()
-			refuse := p.refuse
+			refuse, target := p.refuse, p.target
 			p.mu.Unlock()
 			if refuse {
 				c.Close()
 				continue
 			}
-			s, err := net.Dial("tcp", p.target)
+			s, err := net.Dial("tcp", target)
 			if err != nil {
 				c.Close()
 				continue
@@ -72,6 +72,13 @@ func (p *proxy) cut() {
 func (p *proxy) setRefuse(v bool) {
 	p.mu.Lock()
 	p.refuse = v
+	p.mu.Unlock()
+}
+
+// setTarget forwards new connections to another server.
+func (p *proxy) setTarget(targetURL string) {
+	p.mu.Lock()
+	p.target = targetURL[len("opc.tcp://"):]
 	p.mu.Unlock()
 }
 
@@ -241,5 +248,52 @@ func TestReconnectRecreatesSession(t *testing.T) {
 		t.Fatalf("Err after Close: %v", c.Err())
 	}
 	for range sub.Notifications() {
+	}
+}
+
+// The session is recreated right after connecting, before the keep-alive has
+// run: the server was replaced by one that does not know the session. The
+// keep-alive must not read the session timeout while it is replaced (found by
+// the race detector), and it follows the timeout of the new session.
+func TestReconnectRecreatesSessionOnNewServer(t *testing.T) {
+	first := startServer(t, true)
+	second := startServer(t, true, func(c *server.Config) {
+		c.MinSessionTimeout, c.MaxSessionTimeout = 600*time.Millisecond, 600*time.Millisecond
+	})
+	p, url := newProxy(t, first.url)
+	states := newStateLog()
+	c, err := client.Dial(ctx(t), url, client.Config{
+		AutoReconnect: true, ReconnectInterval: 50 * time.Millisecond,
+		MaxReconnectInterval: 200 * time.Millisecond, OnStateChange: states.record,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close(ctx(t))
+	session, timeout := c.SessionID(), c.SessionTimeout()
+
+	p.setTarget(second.url)
+	p.cut()
+	states.wait(t, client.StateReconnecting)
+	states.wait(t, client.StateConnected)
+	if c.SessionID() == session {
+		t.Fatal("the session was not recreated")
+	}
+	if got := c.SessionTimeout(); got >= timeout || got > 600*time.Millisecond {
+		t.Fatalf("session timeout %v (was %v), want the shorter timeout of the new server", got, timeout)
+	}
+
+	// The keep-alive follows the shorter timeout of the new session: an idle
+	// client keeps the session, so a request still works after several timeouts.
+	time.Sleep(2 * time.Second)
+	if c.State() != client.StateConnected || c.SessionID() == session {
+		t.Fatalf("state %s after idling", c.State())
+	}
+	recreated := c.SessionID()
+	if _, err := c.ReadValue(ctx(t), second.id("Int")); err != nil {
+		t.Fatalf("read after idling: %v", err)
+	}
+	if c.SessionID() != recreated {
+		t.Fatal("the idle session timed out and was recreated again")
 	}
 }
